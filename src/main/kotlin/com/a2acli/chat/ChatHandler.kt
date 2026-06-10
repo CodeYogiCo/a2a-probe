@@ -6,6 +6,7 @@ import com.a2acli.model.*
 import com.a2acli.ui.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.catch
+import kotlinx.serialization.json.*
 import org.jline.reader.LineReaderBuilder
 import org.jline.reader.UserInterruptException
 import org.jline.reader.EndOfFileException

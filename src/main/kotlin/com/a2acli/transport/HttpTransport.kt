@@ -75,7 +75,7 @@ class HttpTransport(
                 parsed["result"] ?: JsonNull
             }
 
-            contentType?.match("text", "event-stream") == true -> {
+            contentType?.match(ContentType.Text.EventStream) == true -> {
                 val body = response.bodyAsText()
                 val lines = body.lines()
                 pendingSseLines = lines

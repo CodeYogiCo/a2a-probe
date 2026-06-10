@@ -86,7 +86,7 @@ class SseTransport(
                 parsed["result"] ?: JsonNull
             }
 
-            contentType?.match("text", "event-stream") == true -> {
+            contentType?.match(ContentType.Text.EventStream) == true -> {
                 pendingSseBody = response.bodyAsText()
                 skippedFirstSseLine = false
 
