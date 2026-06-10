@@ -4,11 +4,12 @@ plugins {
     kotlin("jvm") version "2.0.21"
     kotlin("plugin.serialization") version "2.0.21"
     id("com.github.johnrengelman.shadow") version "8.1.1"
+    `maven-publish`
     application
 }
 
 group = "com.a2acli"
-version = "0.1.0"
+version = System.getenv("RELEASE_VERSION") ?: "0.1.0-SNAPSHOT"
 
 repositories {
     mavenCentral()
@@ -60,6 +61,38 @@ tasks.withType<ShadowJar> {
     archiveClassifier.set("")
     archiveFileName.set("a2a-cli.jar")
     mergeServiceFiles()
+}
+
+publishing {
+    publications {
+        create<MavenPublication>("shadow") {
+            project.shadow.component(this)
+            groupId = "com.a2acli"
+            artifactId = "a2a-cli"
+            version = project.version.toString()
+            pom {
+                name.set("a2a-cli")
+                description.set("Kotlin CLI client for the A2A Agent-to-Agent Protocol")
+                url.set("https://github.com/${System.getenv("GITHUB_REPOSITORY") ?: "codeyogico/a2a-cli-kotlin"}")
+                licenses {
+                    license {
+                        name.set("MIT License")
+                        url.set("https://opensource.org/licenses/MIT")
+                    }
+                }
+            }
+        }
+    }
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/${System.getenv("GITHUB_REPOSITORY") ?: "codeyogico/a2a-cli-kotlin"}")
+            credentials {
+                username = System.getenv("GITHUB_ACTOR") ?: project.findProperty("gpr.user") as String?
+                password = System.getenv("GITHUB_TOKEN") ?: project.findProperty("gpr.key") as String?
+            }
+        }
+    }
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
