@@ -22,6 +22,7 @@ enum class TaskState {
 enum class Role {
     @SerialName("user")      USER,
     @SerialName("assistant") ASSISTANT,
+    @SerialName("agent")     AGENT,
 }
 
 // ── Message parts ────────────────────────────────────────────────────────────

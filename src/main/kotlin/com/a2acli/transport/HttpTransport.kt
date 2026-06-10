@@ -55,8 +55,10 @@ class HttpTransport(
             put("id", requestId)
         }
 
+        val isStreaming = method.endsWith("/stream") || method.endsWith("Subscribe") || method.endsWith("/resubscribe")
         val response: HttpResponse = client.post(endpoint.trimEnd('/')) {
             contentType(ContentType.Application.Json)
+            if (isStreaming) accept(ContentType.Text.EventStream)
             setBody(envelope.toString())
         }
 

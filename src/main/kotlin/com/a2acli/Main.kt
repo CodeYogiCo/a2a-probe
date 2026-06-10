@@ -88,9 +88,11 @@ class SendCommand : CliktCommand(
             message = makeTextMessage(message, sessionId),
         )
 
+        val msg = makeTextMessage(message, sessionId)
         try {
             if (stream && !noStream) {
-                val flow = client.sendSubscribe(params)
+                val flow = try { client.streamMessage(msg) }
+                           catch (_: Exception) { client.sendSubscribe(params) }
                 flow.collect { event ->
                     when (event) {
                         is StreamEvent.Status   -> terminal.printStreamStatus(event.event)
@@ -99,8 +101,12 @@ class SendCommand : CliktCommand(
                     }
                 }
             } else {
-                val task = client.sendTask(params)
-                terminal.printTask(task)
+                val response = try { client.sendMessage(msg) } catch (_: Exception) { null }
+                if (response != null) {
+                    terminal.printMessage(response)
+                } else {
+                    terminal.printTask(client.sendTask(params))
+                }
             }
         } catch (e: Exception) {
             terminal.printError(e.message ?: "Failed")

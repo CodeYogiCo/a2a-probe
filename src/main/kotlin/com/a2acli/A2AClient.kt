@@ -8,6 +8,8 @@ import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
@@ -44,6 +46,27 @@ class A2AClient(private val transport: JsonRpcTransport) {
     }
 
     // ── basic RPC wrappers ─────────────────────────────────────────────────
+
+    // ── message-based API (A2A ≥ 0.4) ────────────────────────────────────────
+
+    suspend fun sendMessage(message: Message): Message {
+        val params = buildJsonObject { put("message", json.encodeToJsonElement(message)) }
+        val raw = transport.call("message/send", params)
+        return json.decodeFromJsonElement(raw)
+    }
+
+    suspend fun streamMessage(message: Message): Flow<StreamEvent> {
+        val params = buildJsonObject { put("message", json.encodeToJsonElement(message)) }
+        val firstResult = transport.call("message/stream", params)
+        return flow {
+            // The first SSE data line is the JSON-RPC result — emit it as a StreamEvent.
+            val firstObj = firstResult as? JsonObject
+            if (firstObj != null) emit(coerceStreamEvent(firstObj))
+            emitAll(transport.stream().map { coerceStreamEvent(it) })
+        }
+    }
+
+    // ── task-based API (A2A 0.3 legacy) ──────────────────────────────────────
 
     suspend fun sendTask(params: TaskSendParams): Task {
         val raw = transport.call("tasks/send", json.encodeToJsonElement(params))

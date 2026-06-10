@@ -38,8 +38,8 @@ fun Terminal.printTask(task: Task) {
 
 fun Terminal.printMessage(message: Message, indent: String = "") {
     val prefix = when (message.role) {
-        Role.USER      -> bold(blue("You:      "))
-        Role.ASSISTANT -> bold(green("Agent:    "))
+        Role.USER                    -> bold(blue("You:      "))
+        Role.ASSISTANT, Role.AGENT   -> bold(green("Agent:    "))
     }
     val text = extractText(message.parts)
     println("$indent$prefix$text")
