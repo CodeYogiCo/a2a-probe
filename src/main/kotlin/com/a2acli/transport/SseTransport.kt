@@ -26,6 +26,7 @@ class SseTransport(
     sseEndpoint: String? = null,
     connectTimeoutMs: Long = 10_000,
     readTimeoutMs: Long = 90_000,
+    testClient: HttpClient? = null,
 ) : JsonRpcTransport {
 
     private val sseEndpoint = sseEndpoint
@@ -38,7 +39,7 @@ class SseTransport(
         explicitNulls = false
     }
 
-    private val client = HttpClient(CIO) {
+    private val client = testClient ?: HttpClient(CIO) {
         install(ContentNegotiation) { json(json) }
         install(HttpTimeout) {
             connectTimeoutMillis = connectTimeoutMs

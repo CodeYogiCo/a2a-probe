@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.a2acli.ConfigTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-06-10T18:32:29" hostname="Vishals-Mac-Studio.local" time="0.013">
+  <properties/>
+  <testcase name="loadConfig returns empty config when file missing(Path)" classname="com.a2acli.ConfigTest" time="0.004"/>
+  <testcase name="resolveServerUrl returns http URL as-is()" classname="com.a2acli.ConfigTest" time="0.0"/>
+  <testcase name="resolveServerUrl throws for unknown named server()" classname="com.a2acli.ConfigTest" time="0.001"/>
+  <testcase name="resolveServerUrl returns https URL as-is()" classname="com.a2acli.ConfigTest" time="0.0"/>
+  <testcase name="saveConfig and loadConfig round-trip(Path)" classname="com.a2acli.ConfigTest" time="0.004"/>
+  <testcase name="resolveServerUrl returns wss URL as-is()" classname="com.a2acli.ConfigTest" time="0.0"/>
+  <testcase name="resolveServerUrl returns ws URL as-is()" classname="com.a2acli.ConfigTest" time="0.0"/>
+  <testcase name="loadConfig returns empty config on malformed JSON(Path)" classname="com.a2acli.ConfigTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

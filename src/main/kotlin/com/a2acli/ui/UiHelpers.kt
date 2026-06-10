@@ -68,7 +68,7 @@ fun Terminal.printStreamArtifact(event: TaskArtifactUpdateEvent) {
 private fun Terminal.printArtifactParts(parts: List<JsonElement>) {
     for (part in parts) {
         val obj = part.jsonObject
-        when (obj["type"]?.jsonPrimitive?.content) {
+        when (obj["kind"]?.jsonPrimitive?.content ?: obj["type"]?.jsonPrimitive?.content) {
             "text" -> print(obj["text"]?.jsonPrimitive?.content ?: "")
             "file" -> {
                 val file = obj["file"]?.jsonObject
@@ -85,7 +85,7 @@ private fun Terminal.printArtifactParts(parts: List<JsonElement>) {
 fun extractText(parts: List<JsonElement>): String =
     parts.joinToString("") { part ->
         val obj = runCatching { part.jsonObject }.getOrNull() ?: return@joinToString part.toString()
-        when (obj["type"]?.jsonPrimitive?.content) {
+        when (obj["kind"]?.jsonPrimitive?.content ?: obj["type"]?.jsonPrimitive?.content) {
             "text" -> obj["text"]?.jsonPrimitive?.content ?: ""
             else   -> obj.toString()
         }

@@ -73,8 +73,8 @@ class ChatHandler(
             message = Message(
                 role = Role.USER,
                 parts = listOf(
-                    kotlinx.serialization.json.buildJsonObject {
-                        put("type", "text")
+                    buildJsonObject {
+                        put("kind", "text")
                         put("text", message)
                     }
                 ),

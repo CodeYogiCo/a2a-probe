@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.a2acli.ui.UiHelpersTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-06-10T18:32:29" hostname="Vishals-Mac-Studio.local" time="0.169">
+  <properties/>
+  <testcase name="extractText returns empty string for empty parts list()" classname="com.a2acli.ui.UiHelpersTest" time="0.166"/>
+  <testcase name="extractText returns empty string for text part with missing text field()" classname="com.a2acli.ui.UiHelpersTest" time="0.0"/>
+  <testcase name="extractText returns text from kind=text part()" classname="com.a2acli.ui.UiHelpersTest" time="0.0"/>
+  <testcase name="extractText handles mixed part types()" classname="com.a2acli.ui.UiHelpersTest" time="0.001"/>
+  <testcase name="extractText returns raw JSON for unknown part type()" classname="com.a2acli.ui.UiHelpersTest" time="0.0"/>
+  <testcase name="extractText falls back to type=text for backward compatibility()" classname="com.a2acli.ui.UiHelpersTest" time="0.0"/>
+  <testcase name="extractText concatenates multiple text parts()" classname="com.a2acli.ui.UiHelpersTest" time="0.0"/>
+  <testcase name="extractText handles non-object JSON element gracefully()" classname="com.a2acli.ui.UiHelpersTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

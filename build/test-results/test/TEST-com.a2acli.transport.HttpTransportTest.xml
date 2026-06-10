@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.a2acli.transport.HttpTransportTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-06-10T18:32:28" hostname="Vishals-Mac-Studio.local" time="0.188">
+  <properties/>
+  <testcase name="stream throws when called without a prior SSE response()" classname="com.a2acli.transport.HttpTransportTest" time="0.172"/>
+  <testcase name="stream emits remaining SSE events after call()" classname="com.a2acli.transport.HttpTransportTest" time="0.004"/>
+  <testcase name="call throws JsonRpcException for JSON-RPC error response()" classname="com.a2acli.transport.HttpTransportTest" time="0.003"/>
+  <testcase name="call throws JsonRpcException for SSE error in first event()" classname="com.a2acli.transport.HttpTransportTest" time="0.001"/>
+  <testcase name="call throws for unsupported content type()" classname="com.a2acli.transport.HttpTransportTest" time="0.001"/>
+  <testcase name="call returns first SSE event as result()" classname="com.a2acli.transport.HttpTransportTest" time="0.001"/>
+  <testcase name="call returns result for JSON response()" classname="com.a2acli.transport.HttpTransportTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J(I): Connected with provider of type [ch.qos.logback.classic.spi.LogbackServiceProvider]
+]]></system-err>
+</testsuite>

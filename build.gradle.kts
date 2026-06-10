@@ -51,6 +51,13 @@ dependencies {
     // Logging
     implementation("org.slf4j:slf4j-api:2.0.13")
     implementation("ch.qos.logback:logback-classic:1.5.8")
+
+    // Test
+    testImplementation("org.junit.jupiter:junit-jupiter:5.10.3")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testImplementation("io.ktor:ktor-client-mock:$ktorVersion")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:$coroutinesVersion")
+    testImplementation(kotlin("test"))
 }
 
 application {

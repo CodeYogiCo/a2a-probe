@@ -63,7 +63,7 @@ private fun buildClient(opts: Map<String, Any>): A2AClient {
 
 private fun makeTextMessage(text: String, sessionId: String): Message = Message(
     role = Role.USER,
-    parts = listOf(buildJsonObject { put("type", "text"); put("text", text) }),
+    parts = listOf(buildJsonObject { put("kind", "text"); put("text", text) }),
     messageId = UUID.randomUUID().toString(),
 )
 

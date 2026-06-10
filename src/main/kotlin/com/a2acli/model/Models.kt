@@ -1,5 +1,6 @@
 package com.a2acli.model
 
+import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
@@ -58,6 +59,7 @@ data class DataPart(
 
 @Serializable
 data class Message(
+    @EncodeDefault val kind: String = "message",
     val role: Role,
     val parts: List<JsonElement>,
     @SerialName("messageId") val messageId: String? = null,

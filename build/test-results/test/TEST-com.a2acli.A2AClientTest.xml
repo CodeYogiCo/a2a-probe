@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.a2acli.A2AClientTest" tests="15" skipped="0" failures="0" errors="0" timestamp="2026-06-10T18:32:29" hostname="Vishals-Mac-Studio.local" time="0.029">
+  <properties/>
+  <testcase name="getTask returns decoded Task()" classname="com.a2acli.A2AClientTest" time="0.007"/>
+  <testcase name="getTask passes historyLength in params()" classname="com.a2acli.A2AClientTest" time="0.001"/>
+  <testcase name="cancelTask calls tasks-cancel()" classname="com.a2acli.A2AClientTest" time="0.001"/>
+  <testcase name="sendSubscribe emits Unknown for unrecognised events()" classname="com.a2acli.A2AClientTest" time="0.008"/>
+  <testcase name="sendTask encodes message kind in params()" classname="com.a2acli.A2AClientTest" time="0.001"/>
+  <testcase name="resubscribe calls tasks-resubscribe()" classname="com.a2acli.A2AClientTest" time="0.0"/>
+  <testcase name="sendTask returns decoded Task()" classname="com.a2acli.A2AClientTest" time="0.002"/>
+  <testcase name="sendSubscribe emits status events()" classname="com.a2acli.A2AClientTest" time="0.001"/>
+  <testcase name="sendSubscribe unwraps tasks-event envelope()" classname="com.a2acli.A2AClientTest" time="0.001"/>
+  <testcase name="sendSubscribe calls tasks-sendSubscribe()" classname="com.a2acli.A2AClientTest" time="0.001"/>
+  <testcase name="cancelTask passes correct task id()" classname="com.a2acli.A2AClientTest" time="0.001"/>
+  <testcase name="sendTask propagates JsonRpcException()" classname="com.a2acli.A2AClientTest" time="0.0"/>
+  <testcase name="sendSubscribe emits artifact events()" classname="com.a2acli.A2AClientTest" time="0.001"/>
+  <testcase name="getTask calls tasks-get()" classname="com.a2acli.A2AClientTest" time="0.001"/>
+  <testcase name="sendTask calls tasks-send()" classname="com.a2acli.A2AClientTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
