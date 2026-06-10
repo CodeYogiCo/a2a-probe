@@ -1,0 +1,16 @@
+<configuration>
+    <appender name="STDERR" class="ch.qos.logback.core.ConsoleAppender">
+        <target>System.err</target>
+        <encoder>
+            <pattern>%d{HH:mm:ss} [%level] %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Default: only show WARN+ to keep stdout clean for pipeline use -->
+    <root level="warn">
+        <appender-ref ref="STDERR"/>
+    </root>
+
+    <!-- Set to DEBUG via --debug flag (runtime reconfiguration in Main.kt) -->
+    <logger name="a2a-cli" level="warn"/>
+</configuration>
