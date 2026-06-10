@@ -2,6 +2,36 @@
 
 A command-line client for the [A2A (Agent-to-Agent) Protocol](https://google.github.io/A2A/) v0.3.0, written in Kotlin.
 
+## Installation
+
+### Docker (recommended)
+
+```bash
+docker pull ghcr.io/codeyogico/a2a-probe:latest
+docker run --rm ghcr.io/codeyogico/a2a-probe send "Hello"
+```
+
+For convenience, add a shell alias:
+
+```bash
+alias a2a='docker run --rm ghcr.io/codeyogico/a2a-probe'
+a2a send "Hello"
+```
+
+### Pre-built JAR
+
+Download the latest `a2a-cli.jar` from the [Releases page](https://github.com/CodeYogiCo/a2a-probe/releases) and run it with:
+
+```bash
+java -jar a2a-cli.jar [OPTIONS] COMMAND
+```
+
+Requires JDK 17+.
+
+### Build from source
+
+See the [Build](#build) section below.
+
 ## Features
 
 - Send tasks, stream responses, watch live updates, and chat interactively with any A2A-compatible agent
