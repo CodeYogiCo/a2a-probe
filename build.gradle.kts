@@ -117,6 +117,8 @@ graalvmNative {
                 "--no-fallback",
                 "-H:+ReportExceptionStackTraces",
                 "--initialize-at-build-time=kotlin",
+                "--initialize-at-run-time=io.ktor.network.tls",
+                "--initialize-at-run-time=io.ktor.client.engine.cio",
             )
         }
     }
