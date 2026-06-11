@@ -1,4 +1,4 @@
-# a2a-cli (Kotlin)
+# a2a-probe
 
 A command-line client for the [A2A (Agent-to-Agent) Protocol](https://google.github.io/A2A/) v0.3.0, written in Kotlin.
 
@@ -8,7 +8,7 @@ A command-line client for the [A2A (Agent-to-Agent) Protocol](https://google.git
 
 ```bash
 brew tap CodeYogiCo/tap
-brew install a2a-cli
+brew install a2a-probe
 ```
 
 This installs a native binary compiled with GraalVM — no Java needed.
@@ -29,10 +29,10 @@ a2a send "Hello"
 
 ### Pre-built JAR
 
-Download the latest `a2a-cli.jar` from the [Releases page](https://github.com/CodeYogiCo/a2a-probe/releases) and run it with:
+Download the latest `a2a-probe.jar` from the [Releases page](https://github.com/CodeYogiCo/a2a-probe/releases) and run it with:
 
 ```bash
-java -jar a2a-cli.jar [OPTIONS] COMMAND
+java -jar a2a-probe.jar [OPTIONS] COMMAND
 ```
 
 Requires JDK 21+.
@@ -60,7 +60,7 @@ See the [Build](#build) section below.
 ./gradlew shadowJar
 ```
 
-Produces `build/libs/a2a-cli.jar`.
+Produces `build/libs/a2a-probe.jar`.
 
 ### Native binary (GraalVM)
 
@@ -68,13 +68,13 @@ Produces `build/libs/a2a-cli.jar`.
 ./gradlew nativeCompile
 ```
 
-Produces `build/native/nativeCompile/a2a-cli` — a standalone binary with no JVM dependency.
+Produces `build/native/nativeCompile/a2a-probe` — a standalone binary with no JVM dependency.
 Requires GraalVM 21 on `$PATH` (e.g. `sdk install java 21.0.7-graalce` via SDKMAN).
 
 ## Usage
 
 ```
-java -jar a2a-cli.jar [OPTIONS] COMMAND
+java -jar a2a-probe.jar [OPTIONS] COMMAND
 
 Options:
   -s, --server TEXT     Server URL or config alias (default: http://localhost:8000)
@@ -102,26 +102,26 @@ Options:
 
 ```bash
 # Send a one-shot task
-java -jar a2a-cli.jar send "Summarise this repo"
+java -jar a2a-probe.jar send "Summarise this repo"
 
 # Stream the response
-java -jar a2a-cli.jar send --stream "Write a haiku"
+java -jar a2a-probe.jar send --stream "Write a haiku"
 
 # Use SSE transport against a named server
-java -jar a2a-cli.jar -s myagent -t sse send "Hello"
+java -jar a2a-probe.jar -s myagent -t sse send "Hello"
 
 # Save a server alias
-java -jar a2a-cli.jar config add myagent http://localhost:9000
+java -jar a2a-probe.jar config add myagent http://localhost:9000
 
 # Interactive chat
-java -jar a2a-cli.jar chat
+java -jar a2a-probe.jar chat
 ```
 
 ## Docker
 
 ```bash
-docker build -t a2a-cli .
-docker run --rm a2a-cli send "Hello"
+docker build -t a2a-probe .
+docker run --rm a2a-probe send "Hello"
 ```
 
 ## License

@@ -11,7 +11,7 @@ val terminal = Terminal()
 fun Terminal.printWelcomeBanner(sessionId: String) {
     println()
     println(bold("╔══════════════════════════════════════╗"))
-    println(bold("║        A2A CLI — Kotlin Edition       ║"))
+    println(bold("║      A2A Probe — Kotlin Edition       ║"))
     println(bold("║    Agent-to-Agent Protocol v0.3.0     ║"))
     println(bold("╚══════════════════════════════════════╝"))
     println(dim("  Session: $sessionId"))

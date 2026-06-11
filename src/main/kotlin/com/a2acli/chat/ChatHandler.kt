@@ -24,7 +24,7 @@ class ChatHandler(
         val jlineTerminal = TerminalBuilder.builder().system(true).build()
         val reader = LineReaderBuilder.builder()
             .terminal(jlineTerminal)
-            .appName("a2a-cli")
+            .appName("a2a-probe")
             .build()
 
         terminal.printWelcomeBanner(sessionId)

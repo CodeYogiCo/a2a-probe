@@ -12,5 +12,5 @@
     </root>
 
     <!-- Set to DEBUG via the debug flag (runtime reconfiguration in Main.kt) -->
-    <logger name="a2a-cli" level="warn"/>
+    <logger name="a2a-probe" level="warn"/>
 </configuration>

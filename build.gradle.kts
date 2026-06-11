@@ -67,7 +67,7 @@ application {
 
 tasks.withType<ShadowJar> {
     archiveClassifier.set("")
-    archiveFileName.set("a2a-cli.jar")
+    archiveFileName.set("a2a-probe.jar")
     mergeServiceFiles()
 }
 
@@ -76,12 +76,12 @@ publishing {
         create<MavenPublication>("shadow") {
             project.shadow.component(this)
             groupId = "com.a2acli"
-            artifactId = "a2a-cli"
+            artifactId = "a2a-probe"
             version = project.version.toString()
             pom {
-                name.set("a2a-cli")
+                name.set("a2a-probe")
                 description.set("Kotlin CLI client for the A2A Agent-to-Agent Protocol")
-                url.set("https://github.com/${System.getenv("GITHUB_REPOSITORY") ?: "codeyogico/a2a-cli-kotlin"}")
+                url.set("https://github.com/${System.getenv("GITHUB_REPOSITORY") ?: "codeyogico/a2a-probe-kotlin"}")
                 licenses {
                     license {
                         name.set("MIT License")
@@ -94,7 +94,7 @@ publishing {
     repositories {
         maven {
             name = "GitHubPackages"
-            url = uri("https://maven.pkg.github.com/${System.getenv("GITHUB_REPOSITORY") ?: "codeyogico/a2a-cli-kotlin"}")
+            url = uri("https://maven.pkg.github.com/${System.getenv("GITHUB_REPOSITORY") ?: "codeyogico/a2a-probe-kotlin"}")
             credentials {
                 username = System.getenv("GITHUB_ACTOR") ?: project.findProperty("gpr.user") as String?
                 password = System.getenv("GITHUB_TOKEN") ?: project.findProperty("gpr.key") as String?
@@ -111,7 +111,7 @@ graalvmNative {
     toolchainDetection.set(false)
     binaries {
         named("main") {
-            imageName.set("a2a-cli")
+            imageName.set("a2a-probe")
             mainClass.set("com.a2acli.MainKt")
             buildArgs.addAll(
                 "--no-fallback",

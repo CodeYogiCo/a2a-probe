@@ -35,5 +35,5 @@ fun resolveServerUrl(nameOrUrl: String): String {
 
     val config = loadConfig()
     return config.servers[nameOrUrl]?.url
-        ?: error("Unknown server '$nameOrUrl'. Add it with: a2a-cli config add $nameOrUrl <url>")
+        ?: error("Unknown server '$nameOrUrl'. Add it with: a2a-probe config add $nameOrUrl <url>")
 }

@@ -18,7 +18,7 @@ import java.util.UUID
 // ── root command ──────────────────────────────────────────────────────────────
 
 class A2ACli : CliktCommand(
-    name = "a2a-cli",
+    name = "a2a-probe",
     help = "Command-line client for the A2A (Agent-to-Agent) Protocol v0.3.0",
 ) {
     private val server by option(
@@ -287,7 +287,7 @@ class ConfigListCommand : CliktCommand(
     override fun run() {
         val config = loadConfig()
         if (config.servers.isEmpty()) {
-            terminal.printInfo("No servers configured. Use: a2a-cli config add <name> <url>")
+            terminal.printInfo("No servers configured. Use: a2a-probe config add <name> <url>")
             return
         }
         terminal.println(bold("Configured servers:"))

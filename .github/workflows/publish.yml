@@ -38,8 +38,8 @@ jobs:
       - name: Upload JAR artifact
         uses: actions/upload-artifact@v4
         with:
-          name: a2a-cli-jar
-          path: build/libs/a2a-cli.jar
+          name: a2a-probe-jar
+          path: build/libs/a2a-probe.jar
           retention-days: 7
 
   # ── GraalVM native binaries (3 platforms) ────────────────────────────────────
@@ -52,9 +52,9 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            artifact: a2a-cli-linux-amd64
+            artifact: a2a-probe-linux-amd64
           - os: macos-latest
-            artifact: a2a-cli-darwin-arm64
+            artifact: a2a-probe-darwin-arm64
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -73,7 +73,7 @@ jobs:
         run: ./gradlew nativeCompile --no-daemon
 
       - name: Rename binary
-        run: mv build/native/nativeCompile/a2a-cli ${{ matrix.artifact }}
+        run: mv build/native/nativeCompile/a2a-probe ${{ matrix.artifact }}
 
       - name: Upload native artifact
         uses: actions/upload-artifact@v4
@@ -160,32 +160,32 @@ jobs:
       - name: Download JAR
         uses: actions/download-artifact@v4
         with:
-          name: a2a-cli-jar
+          name: a2a-probe-jar
 
       - name: Download linux binary
         uses: actions/download-artifact@v4
         with:
-          name: a2a-cli-linux-amd64
+          name: a2a-probe-linux-amd64
 
       - name: Download macOS ARM64 binary
         uses: actions/download-artifact@v4
         with:
-          name: a2a-cli-darwin-arm64
+          name: a2a-probe-darwin-arm64
 
       - name: Calculate SHA256
         id: sha
         run: |
-          echo "linux=$(sha256sum a2a-cli-linux-amd64   | awk '{print $1}')" >> "$GITHUB_OUTPUT"
-          echo "darwin_arm64=$(sha256sum a2a-cli-darwin-arm64 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "linux=$(sha256sum a2a-probe-linux-amd64   | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "darwin_arm64=$(sha256sum a2a-probe-darwin-arm64 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           files: |
-            a2a-cli.jar
-            a2a-cli-linux-amd64
-            a2a-cli-darwin-arm64
+            a2a-probe.jar
+            a2a-probe-linux-amd64
+            a2a-probe-darwin-arm64
 
   # ── update Homebrew formula in CodeYogiCo/homebrew-tap ──────────────────────
   update-homebrew-tap:
@@ -217,7 +217,7 @@ jobs:
         run: |
           V="${VERSION#v}"
           mkdir -p homebrew-tap/Formula
-          cat > homebrew-tap/Formula/a2a-cli.rb <<FORMULA
+          cat > homebrew-tap/Formula/a2a-probe.rb <<FORMULA
           class A2aCli < Formula
             desc "Command-line client for the A2A (Agent-to-Agent) Protocol"
             homepage "https://github.com/CodeYogiCo/a2a-probe"
@@ -225,26 +225,26 @@ jobs:
             version "$V"
 
             on_macos do
-              url "https://github.com/CodeYogiCo/a2a-probe/releases/download/${VERSION}/a2a-cli-darwin-arm64"
+              url "https://github.com/CodeYogiCo/a2a-probe/releases/download/${VERSION}/a2a-probe-darwin-arm64"
               sha256 "$ARM64_SHA"
             end
 
             on_linux do
-              url "https://github.com/CodeYogiCo/a2a-probe/releases/download/${VERSION}/a2a-cli-linux-amd64"
+              url "https://github.com/CodeYogiCo/a2a-probe/releases/download/${VERSION}/a2a-probe-linux-amd64"
               sha256 "$LINUX_SHA"
             end
 
             def install
               on_macos do
-                bin.install "a2a-cli-darwin-arm64" => "a2a-cli"
+                bin.install "a2a-probe-darwin-arm64" => "a2a-probe"
               end
               on_linux do
-                bin.install "a2a-cli-linux-amd64" => "a2a-cli"
+                bin.install "a2a-probe-linux-amd64" => "a2a-probe"
               end
             end
 
             test do
-              assert_match "a2a-cli", shell_output("#{bin}/a2a-cli --help 2>&1")
+              assert_match "a2a-probe", shell_output("#{bin}/a2a-probe --help 2>&1")
             end
           end
           FORMULA
@@ -255,6 +255,6 @@ jobs:
           cd homebrew-tap
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Formula/a2a-cli.rb
-          git diff --cached --quiet || git commit -m "a2a-cli ${{ github.ref_name }}"
+          git add Formula/a2a-probe.rb
+          git diff --cached --quiet || git commit -m "a2a-probe ${{ github.ref_name }}"
           git push

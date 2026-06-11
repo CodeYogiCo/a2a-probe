@@ -11,5 +11,5 @@ RUN chmod +x gradlew && ./gradlew shadowJar --no-daemon -q
 # ── runtime stage ─────────────────────────────────────────────────────────────
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
-COPY --from=builder /build/build/libs/a2a-cli.jar a2a-cli.jar
-ENTRYPOINT ["java", "-jar", "a2a-cli.jar"]
+COPY --from=builder /build/build/libs/a2a-probe.jar a2a-probe.jar
+ENTRYPOINT ["java", "-jar", "a2a-probe.jar"]
