@@ -116,8 +116,6 @@ graalvmNative {
             buildArgs.addAll(
                 "--no-fallback",
                 "-H:+ReportExceptionStackTraces",
-                "--initialize-at-build-time=org.slf4j,ch.qos.logback",
-                "-H:EnableURLProtocols=http,https",
             )
         }
     }
