@@ -21,7 +21,7 @@ class A2ACli : CliktCommand(
     name = "a2a-probe",
     help = "Command-line client for the A2A (Agent-to-Agent) Protocol v0.3.0",
 ) {
-    init { versionOption("0.1.10") }
+    init { versionOption("0.1.11") }
 
     private val server by option(
         "-s", "--server",
