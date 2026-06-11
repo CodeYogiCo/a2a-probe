@@ -46,6 +46,7 @@ jobs:
   native-build:
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -54,8 +55,6 @@ jobs:
             artifact: a2a-cli-linux-amd64
           - os: macos-latest
             artifact: a2a-cli-darwin-arm64
-          - os: macos-13
-            artifact: a2a-cli-darwin-amd64
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -156,7 +155,6 @@ jobs:
     outputs:
       linux_sha: ${{ steps.sha.outputs.linux }}
       darwin_arm64_sha: ${{ steps.sha.outputs.darwin_arm64 }}
-      darwin_amd64_sha: ${{ steps.sha.outputs.darwin_amd64 }}
 
     steps:
       - name: Download JAR
@@ -174,17 +172,11 @@ jobs:
         with:
           name: a2a-cli-darwin-arm64
 
-      - name: Download macOS AMD64 binary
-        uses: actions/download-artifact@v4
-        with:
-          name: a2a-cli-darwin-amd64
-
       - name: Calculate SHA256
         id: sha
         run: |
           echo "linux=$(sha256sum a2a-cli-linux-amd64   | awk '{print $1}')" >> "$GITHUB_OUTPUT"
           echo "darwin_arm64=$(sha256sum a2a-cli-darwin-arm64 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
-          echo "darwin_amd64=$(sha256sum a2a-cli-darwin-amd64 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -194,7 +186,6 @@ jobs:
             a2a-cli.jar
             a2a-cli-linux-amd64
             a2a-cli-darwin-arm64
-            a2a-cli-darwin-amd64
 
   # ── update Homebrew formula in CodeYogiCo/homebrew-tap ──────────────────────
   update-homebrew-tap:
@@ -223,7 +214,6 @@ jobs:
           VERSION: ${{ github.ref_name }}
           LINUX_SHA: ${{ needs.release.outputs.linux_sha }}
           ARM64_SHA: ${{ needs.release.outputs.darwin_arm64_sha }}
-          AMD64_SHA: ${{ needs.release.outputs.darwin_amd64_sha }}
         run: |
           V="${VERSION#v}"
           mkdir -p homebrew-tap/Formula
@@ -235,13 +225,8 @@ jobs:
             version "$V"
 
             on_macos do
-              if Hardware::CPU.arm?
-                url "https://github.com/CodeYogiCo/a2a-probe/releases/download/${VERSION}/a2a-cli-darwin-arm64"
-                sha256 "$ARM64_SHA"
-              else
-                url "https://github.com/CodeYogiCo/a2a-probe/releases/download/${VERSION}/a2a-cli-darwin-amd64"
-                sha256 "$AMD64_SHA"
-              end
+              url "https://github.com/CodeYogiCo/a2a-probe/releases/download/${VERSION}/a2a-cli-darwin-arm64"
+              sha256 "$ARM64_SHA"
             end
 
             on_linux do
@@ -251,11 +236,7 @@ jobs:
 
             def install
               on_macos do
-                if Hardware::CPU.arm?
-                  bin.install "a2a-cli-darwin-arm64" => "a2a-cli"
-                else
-                  bin.install "a2a-cli-darwin-amd64" => "a2a-cli"
-                end
+                bin.install "a2a-cli-darwin-arm64" => "a2a-cli"
               end
               on_linux do
                 bin.install "a2a-cli-linux-amd64" => "a2a-cli"
