@@ -2,17 +2,18 @@ package com.a2acli
 
 import com.a2acli.model.*
 import com.a2acli.transport.*
-import io.ktor.client.*
-import io.ktor.client.engine.cio.*
-import io.ktor.client.plugins.*
-import io.ktor.client.request.*
-import io.ktor.client.statement.*
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
-import kotlinx.serialization.encodeToString
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
+import java.net.URI
+import java.net.http.HttpClient
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
+import java.time.Duration
 
 /**
  * Transport-agnostic high-level A2A client.
@@ -116,12 +117,18 @@ class A2AClient(private val transport: JsonRpcTransport) {
     suspend fun fetchAgentCard(baseUrl: String): AgentCard? {
         val cardUrl = baseUrl.trimEnd('/') + "/.well-known/agent.json"
         return try {
-            val httpClient = HttpClient(CIO) {
-                install(HttpTimeout) { requestTimeoutMillis = 10_000 }
+            val httpClient = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofMillis(10_000))
+                .build()
+            val request = HttpRequest.newBuilder()
+                .uri(URI.create(cardUrl))
+                .timeout(Duration.ofMillis(10_000))
+                .GET()
+                .build()
+            val response = withContext(Dispatchers.IO) {
+                httpClient.send(request, HttpResponse.BodyHandlers.ofString())
             }
-            val response: HttpResponse = httpClient.get(cardUrl)
-            httpClient.close()
-            json.decodeFromString<AgentCard>(response.bodyAsText())
+            json.decodeFromString<AgentCard>(response.body())
         } catch (_: Exception) {
             null
         }

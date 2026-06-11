@@ -16,7 +16,6 @@ repositories {
     mavenCentral()
 }
 
-val ktorVersion = "2.3.12"
 val coroutinesVersion = "1.8.1"
 val serializationVersion = "1.7.3"
 val cliktVersion = "4.4.0"
@@ -24,14 +23,6 @@ val mordantVersion = "2.7.0"
 val jlineVersion = "3.26.3"
 
 dependencies {
-    // Ktor client
-    implementation("io.ktor:ktor-client-core:$ktorVersion")
-    implementation("io.ktor:ktor-client-cio:$ktorVersion")
-    implementation("io.ktor:ktor-client-websockets:$ktorVersion")
-    implementation("io.ktor:ktor-client-content-negotiation:$ktorVersion")
-    implementation("io.ktor:ktor-serialization-kotlinx-json:$ktorVersion")
-    implementation("io.ktor:ktor-client-logging:$ktorVersion")
-
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion")
 
@@ -56,7 +47,6 @@ dependencies {
     // Test
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.3")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-    testImplementation("io.ktor:ktor-client-mock:$ktorVersion")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:$coroutinesVersion")
     testImplementation(kotlin("test"))
 }
@@ -117,7 +107,6 @@ graalvmNative {
                 "--no-fallback",
                 "-H:+ReportExceptionStackTraces",
                 "--initialize-at-build-time=kotlin",
-                "--initialize-at-run-time=io.ktor",
             )
         }
     }

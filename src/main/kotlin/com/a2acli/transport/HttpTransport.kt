@@ -1,30 +1,21 @@
 package com.a2acli.transport
 
-import io.ktor.client.*
-import io.ktor.client.engine.cio.*
-import io.ktor.client.plugins.*
-import io.ktor.client.plugins.contentnegotiation.*
-import io.ktor.client.request.*
-import io.ktor.client.statement.*
-import io.ktor.http.*
-import io.ktor.serialization.kotlinx.json.*
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
+import java.net.URI
+import java.net.http.HttpClient
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
+import java.time.Duration
 import java.util.UUID
 
-/**
- * HTTP transport for JSON-RPC 2.0.
- *
- * Handles both plain application/json responses and merged text/event-stream
- * responses (where the first SSE data line is the JSON-RPC result and subsequent
- * lines are streamed via [stream]).
- */
 class HttpTransport(
     private val endpoint: String,
     connectTimeoutMs: Long = 10_000,
     readTimeoutMs: Long = 90_000,
-    testClient: HttpClient? = null,
 ) : JsonRpcTransport {
 
     private val json = Json {
@@ -34,40 +25,42 @@ class HttpTransport(
         explicitNulls = false
     }
 
-    private val client = testClient ?: HttpClient(CIO) {
-        install(ContentNegotiation) { json(json) }
-        install(HttpTimeout) {
-            connectTimeoutMillis = connectTimeoutMs
-            requestTimeoutMillis = readTimeoutMs
-            socketTimeoutMillis = readTimeoutMs
-        }
-    }
+    private val client: HttpClient = HttpClient.newBuilder()
+        .connectTimeout(Duration.ofMillis(connectTimeoutMs))
+        .build()
 
-    // Holds the raw SSE body text for merged-stream responses.
+    private val requestTimeout: Duration = Duration.ofMillis(readTimeoutMs)
+
     private var pendingSseLines: List<String>? = null
 
     override suspend fun call(method: String, params: JsonElement): JsonElement {
-        val requestId = UUID.randomUUID().toString()
         val envelope = buildJsonObject {
             put("jsonrpc", "2.0")
             put("method", method)
             put("params", params)
-            put("id", requestId)
+            put("id", UUID.randomUUID().toString())
         }
 
-        val isStreaming = method.endsWith("/stream") || method.endsWith("Subscribe") || method.endsWith("/resubscribe")
-        val response: HttpResponse = client.post(endpoint.trimEnd('/')) {
-            contentType(ContentType.Application.Json)
-            if (isStreaming) accept(ContentType.Text.EventStream)
-            setBody(envelope.toString())
+        val isStreaming = method.endsWith("/stream") ||
+                method.endsWith("Subscribe") ||
+                method.endsWith("/resubscribe")
+
+        val reqBuilder = HttpRequest.newBuilder()
+            .uri(URI.create(endpoint.trimEnd('/')))
+            .header("Content-Type", "application/json")
+            .timeout(requestTimeout)
+            .POST(HttpRequest.BodyPublishers.ofString(envelope.toString()))
+        if (isStreaming) reqBuilder.header("Accept", "text/event-stream")
+
+        val response = withContext(Dispatchers.IO) {
+            client.send(reqBuilder.build(), HttpResponse.BodyHandlers.ofString())
         }
 
-        val contentType = response.contentType()?.withoutParameters()
+        val contentType = response.headers().firstValue("content-type").orElse("")
 
         return when {
-            contentType == ContentType.Application.Json -> {
-                val body = response.bodyAsText()
-                val parsed = json.parseToJsonElement(body).jsonObject
+            "application/json" in contentType -> {
+                val parsed = json.parseToJsonElement(response.body()).jsonObject
                 parsed["error"]?.jsonObject?.let { err ->
                     throw JsonRpcException(
                         err["message"]?.jsonPrimitive?.content ?: "RPC error",
@@ -78,14 +71,11 @@ class HttpTransport(
                 parsed["result"] ?: JsonNull
             }
 
-            contentType?.match(ContentType.Text.EventStream) == true -> {
-                val body = response.bodyAsText()
-                val lines = body.lines()
+            "text/event-stream" in contentType -> {
+                val lines = response.body().lines()
                 pendingSseLines = lines
-
                 val firstData = lines.firstOrNull { it.startsWith("data:") }
                     ?: throw JsonRpcException("Empty SSE stream")
-
                 val first = json.parseToJsonElement(firstData.removePrefix("data:").trim()).jsonObject
                 first["error"]?.jsonObject?.let { err ->
                     throw JsonRpcException(
@@ -104,26 +94,17 @@ class HttpTransport(
     override fun stream(): Flow<JsonObject> = flow {
         val lines = pendingSseLines
             ?: throw IllegalStateException("stream() called before a merged SSE call")
-
         var skippedFirst = false
         for (line in lines) {
             if (!line.startsWith("data:")) continue
-            if (!skippedFirst) {
-                skippedFirst = true
-                continue
-            }
+            if (!skippedFirst) { skippedFirst = true; continue }
             val text = line.removePrefix("data:").trim()
             if (text.isEmpty() || text == "[DONE]") continue
-            try {
-                emit(json.parseToJsonElement(text).jsonObject)
-            } catch (_: Exception) {
-                emit(buildJsonObject { put("raw", text) })
-            }
+            try { emit(json.parseToJsonElement(text).jsonObject) }
+            catch (_: Exception) { emit(buildJsonObject { put("raw", text) }) }
         }
         pendingSseLines = null
     }
 
-    override suspend fun close() {
-        client.close()
-    }
+    override suspend fun close() {}
 }

@@ -1,22 +1,18 @@
 package com.a2acli.transport
 
-import io.ktor.client.*
-import io.ktor.client.engine.cio.*
-import io.ktor.client.plugins.websocket.*
-import io.ktor.websocket.*
-import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
+import java.net.URI
+import java.net.http.HttpClient
+import java.net.http.WebSocket
 import java.util.UUID
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionStage
 
-/**
- * WebSocket transport for JSON-RPC 2.0.
- *
- * Maintains a single persistent WebSocket connection. Each [call] sends a
- * JSON-RPC request frame and reads exactly one response frame. [stream]
- * reads subsequent frames as a Flow.
- */
 class WebSocketTransport(
     private val url: String,
     connectTimeoutMs: Long = 10_000,
@@ -29,36 +25,56 @@ class WebSocketTransport(
         explicitNulls = false
     }
 
-    private val client = HttpClient(CIO) {
-        install(WebSockets)
+    private val httpClient: HttpClient = HttpClient.newHttpClient()
+    private val messageChannel = Channel<String>(Channel.UNLIMITED)
+    private val textBuffer = StringBuilder()
+    private var webSocket: WebSocket? = null
+
+    private val listener = object : WebSocket.Listener {
+        override fun onText(ws: WebSocket, data: CharSequence, last: Boolean): CompletionStage<*> {
+            textBuffer.append(data)
+            if (last) {
+                messageChannel.trySend(textBuffer.toString())
+                textBuffer.clear()
+            }
+            ws.request(1)
+            return CompletableFuture.completedFuture(null)
+        }
+
+        override fun onClose(ws: WebSocket, statusCode: Int, reason: String): CompletionStage<*> {
+            messageChannel.close()
+            return CompletableFuture.completedFuture(null)
+        }
+
+        override fun onError(ws: WebSocket, error: Throwable) {
+            messageChannel.close(Exception(error))
+        }
     }
 
-    private var session: WebSocketSession? = null
-    private var incoming: ReceiveChannel<Frame>? = null
-
-    private suspend fun ensureConnected(): WebSocketSession {
-        val existing = session
-        if (existing != null) return existing
-        val ws = client.webSocketSession(url)
-        session = ws
-        incoming = ws.incoming
+    private suspend fun ensureConnected(): WebSocket {
+        webSocket?.let { return it }
+        val ws = withContext(Dispatchers.IO) {
+            httpClient.newWebSocketBuilder()
+                .buildAsync(URI.create(url), listener)
+                .get()
+        }
+        ws.request(1)
+        webSocket = ws
         return ws
     }
 
     override suspend fun call(method: String, params: JsonElement): JsonElement {
         val ws = ensureConnected()
-        val requestId = UUID.randomUUID().toString()
         val envelope = buildJsonObject {
             put("jsonrpc", "2.0")
             put("method", method)
             put("params", params)
-            put("id", requestId)
+            put("id", UUID.randomUUID().toString())
         }
-        ws.send(Frame.Text(envelope.toString()))
-
-        // Read one response frame
-        val frame = ws.incoming.receive()
-        val text = (frame as Frame.Text).readText()
+        withContext(Dispatchers.IO) {
+            ws.sendText(envelope.toString(), true).get()
+        }
+        val text = messageChannel.receive()
         val parsed = json.parseToJsonElement(text).jsonObject
         parsed["error"]?.jsonObject?.let { err ->
             throw JsonRpcException(
@@ -71,22 +87,17 @@ class WebSocketTransport(
     }
 
     override fun stream(): Flow<JsonObject> = flow {
-        val ws = session ?: throw IllegalStateException("stream() called before connect")
-        for (frame in ws.incoming) {
-            if (frame is Frame.Text) {
-                val text = frame.readText()
-                try {
-                    emit(json.parseToJsonElement(text).jsonObject)
-                } catch (_: Exception) {
-                    emit(buildJsonObject { put("raw", text) })
-                }
-            }
+        for (text in messageChannel) {
+            try { emit(json.parseToJsonElement(text).jsonObject) }
+            catch (_: Exception) { emit(buildJsonObject { put("raw", text) }) }
         }
     }
 
     override suspend fun close() {
-        session?.close()
-        session = null
-        client.close()
+        withContext(Dispatchers.IO) {
+            webSocket?.sendClose(WebSocket.NORMAL_CLOSURE, "")?.get()
+        }
+        webSocket = null
+        messageChannel.close()
     }
 }
