@@ -21,7 +21,7 @@ class A2ACli : CliktCommand(
     name = "a2a-probe",
     help = "Command-line client for the A2A (Agent-to-Agent) Protocol v0.3.0",
 ) {
-    init { versionOption("0.1.12") }
+    init { versionOption("0.1.13") }
 
     private val server by option(
         "-s", "--server",
@@ -301,7 +301,27 @@ class ConfigListCommand : CliktCommand(
 
 // ── entry point ───────────────────────────────────────────────────────────────
 
+private fun configureSsl() {
+    val os = System.getProperty("os.name", "").lowercase()
+    when {
+        "mac" in os ->
+            // macOS: use the system Keychain — always has current root CAs, no file path needed
+            System.setProperty("javax.net.ssl.trustStoreType", "KeychainStore")
+        "linux" in os -> {
+            // Linux: point to the Java-format CA bundle installed by ca-certificates-java
+            listOf(
+                "/etc/ssl/certs/java/cacerts",   // Debian / Ubuntu
+                "/etc/pki/java/cacerts",          // RHEL / CentOS / Fedora
+            ).firstOrNull { java.io.File(it).exists() }?.let { path ->
+                System.setProperty("javax.net.ssl.trustStore", path)
+                System.setProperty("javax.net.ssl.trustStorePassword", "changeit")
+            }
+        }
+    }
+}
+
 fun main(args: Array<String>) {
+    configureSsl()
     A2ACli()
         .subcommands(
             SendCommand(),
