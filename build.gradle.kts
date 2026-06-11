@@ -4,6 +4,7 @@ plugins {
     kotlin("jvm") version "2.0.21"
     kotlin("plugin.serialization") version "2.0.21"
     id("com.github.johnrengelman.shadow") version "8.1.1"
+    id("org.graalvm.buildtools.native") version "0.10.3"
     `maven-publish`
     application
 }
@@ -104,6 +105,22 @@ publishing {
 
 java {
     toolchain { languageVersion.set(JavaLanguageVersion.of(21)) }
+}
+
+graalvmNative {
+    toolchainDetection.set(false)
+    binaries {
+        named("main") {
+            imageName.set("a2a-cli")
+            mainClass.set("com.a2acli.MainKt")
+            buildArgs.addAll(
+                "--no-fallback",
+                "-H:+ReportExceptionStackTraces",
+                "--initialize-at-build-time=org.slf4j,ch.qos.logback",
+                "-H:EnableURLProtocols=http,https",
+            )
+        }
+    }
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {

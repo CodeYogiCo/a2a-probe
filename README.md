@@ -4,7 +4,16 @@ A command-line client for the [A2A (Agent-to-Agent) Protocol](https://google.git
 
 ## Installation
 
-### Docker (recommended)
+### Homebrew (macOS / Linux — no JVM required)
+
+```bash
+brew tap CodeYogiCo/tap
+brew install a2a-cli
+```
+
+This installs a native binary compiled with GraalVM — no Java needed.
+
+### Docker (recommended for containers)
 
 ```bash
 docker pull ghcr.io/codeyogico/a2a-probe:latest
@@ -26,7 +35,7 @@ Download the latest `a2a-cli.jar` from the [Releases page](https://github.com/Co
 java -jar a2a-cli.jar [OPTIONS] COMMAND
 ```
 
-Requires JDK 17+.
+Requires JDK 21+.
 
 ### Build from source
 
@@ -42,7 +51,7 @@ See the [Build](#build) section below.
 
 ## Requirements
 
-- JDK 17+
+- JDK 21+ (only needed for JAR/source builds; Homebrew install requires no JVM)
 - Gradle (or use the included `./gradlew` wrapper)
 
 ## Build
@@ -52,6 +61,15 @@ See the [Build](#build) section below.
 ```
 
 Produces `build/libs/a2a-cli.jar`.
+
+### Native binary (GraalVM)
+
+```bash
+./gradlew nativeCompile
+```
+
+Produces `build/native/nativeCompile/a2a-cli` — a standalone binary with no JVM dependency.
+Requires GraalVM 21 on `$PATH` (e.g. `sdk install java 21.0.7-graalce` via SDKMAN).
 
 ## Usage
 

@@ -1,0 +1,9 @@
+{
+  "resources": {
+    "includes": [
+      { "pattern": "logback.xml" },
+      { "pattern": "logback-test.xml" },
+      { "pattern": "META-INF/services/.*" }
+    ]
+  }
+}

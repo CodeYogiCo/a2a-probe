@@ -1,0 +1,39 @@
+[
+  {
+    "name": "ch.qos.logback.classic.spi.LogbackServiceProvider",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "ch.qos.logback.core.ConsoleAppender",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "ch.qos.logback.classic.encoder.PatternLayoutEncoder",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "ch.qos.logback.classic.PatternLayout",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "ch.qos.logback.core.pattern.PatternLayoutBase",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  { "name": "ch.qos.logback.classic.pattern.DateConverter",          "allDeclaredConstructors": true },
+  { "name": "ch.qos.logback.classic.pattern.LevelConverter",         "allDeclaredConstructors": true },
+  { "name": "ch.qos.logback.classic.pattern.LoggerConverter",        "allDeclaredConstructors": true },
+  { "name": "ch.qos.logback.classic.pattern.MessageConverter",       "allDeclaredConstructors": true },
+  { "name": "ch.qos.logback.classic.pattern.LineSeparatorConverter", "allDeclaredConstructors": true },
+  { "name": "ch.qos.logback.classic.pattern.ThreadConverter",        "allDeclaredConstructors": true },
+  { "name": "ch.qos.logback.core.pattern.IdentityCompositeConverter","allDeclaredConstructors": true }
+]

@@ -12,6 +12,7 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  # ── fat JAR build + unit tests ───────────────────────────────────────────────
   build:
     runs-on: ubuntu-latest
     permissions:
@@ -20,17 +21,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: "17"
+          java-version: "21"
           distribution: "temurin"
           cache: gradle
 
       - name: Build fat JAR
         run: ./gradlew shadowJar --no-daemon
 
-      - name: Run tests
+      - name: Run unit tests
         run: ./gradlew test --no-daemon
 
       - name: Upload JAR artifact
@@ -40,6 +41,48 @@ jobs:
           path: build/libs/a2a-cli.jar
           retention-days: 7
 
+  # ── GraalVM native binaries (3 platforms) ────────────────────────────────────
+  native-build:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: a2a-cli-linux-amd64
+          - os: macos-latest
+            artifact: a2a-cli-darwin-arm64
+          - os: macos-13
+            artifact: a2a-cli-darwin-amd64
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up GraalVM 21 (Community)
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: "21"
+          distribution: "graalvm-community"
+          cache: "gradle"
+
+      - name: Build native image
+        run: ./gradlew nativeCompile --no-daemon
+
+      - name: Rename binary
+        run: mv build/native/nativeCompile/a2a-cli ${{ matrix.artifact }}
+
+      - name: Upload native artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+          retention-days: 7
+
+  # ── publish JAR to GitHub Packages ──────────────────────────────────────────
   publish-jar:
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
@@ -51,10 +94,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: "17"
+          java-version: "21"
           distribution: "temurin"
           cache: gradle
 
@@ -65,6 +108,7 @@ jobs:
           RELEASE_VERSION: ${{ github.ref_name }}
         run: ./gradlew publish --no-daemon
 
+  # ── publish Docker image to GHCR ────────────────────────────────────────────
   publish-docker:
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
@@ -101,12 +145,17 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
+  # ── GitHub Release with JAR + all native binaries ───────────────────────────
   release:
-    needs: [publish-jar, publish-docker]
+    needs: [publish-jar, publish-docker, native-build]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      linux_sha: ${{ steps.sha.outputs.linux }}
+      darwin_arm64_sha: ${{ steps.sha.outputs.darwin_arm64 }}
+      darwin_amd64_sha: ${{ steps.sha.outputs.darwin_amd64 }}
 
     steps:
       - name: Download JAR
@@ -114,8 +163,116 @@ jobs:
         with:
           name: a2a-cli-jar
 
+      - name: Download linux binary
+        uses: actions/download-artifact@v4
+        with:
+          name: a2a-cli-linux-amd64
+
+      - name: Download macOS ARM64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: a2a-cli-darwin-arm64
+
+      - name: Download macOS AMD64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: a2a-cli-darwin-amd64
+
+      - name: Calculate SHA256
+        id: sha
+        run: |
+          echo "linux=$(sha256sum a2a-cli-linux-amd64   | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "darwin_arm64=$(sha256sum a2a-cli-darwin-arm64 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "darwin_amd64=$(sha256sum a2a-cli-darwin-amd64 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: a2a-cli.jar
           generate_release_notes: true
+          files: |
+            a2a-cli.jar
+            a2a-cli-linux-amd64
+            a2a-cli-darwin-arm64
+            a2a-cli-darwin-amd64
+
+  # ── update Homebrew formula in CodeYogiCo/homebrew-tap ──────────────────────
+  update-homebrew-tap:
+    needs: release
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    env:
+      TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+    steps:
+      - name: Skip if no token
+        if: env.TAP_TOKEN == ''
+        run: echo "HOMEBREW_TAP_TOKEN secret not set — skipping formula update" && exit 0
+
+      - name: Checkout homebrew-tap
+        if: env.TAP_TOKEN != ''
+        uses: actions/checkout@v4
+        with:
+          repository: CodeYogiCo/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+
+      - name: Write formula
+        if: env.TAP_TOKEN != ''
+        env:
+          VERSION: ${{ github.ref_name }}
+          LINUX_SHA: ${{ needs.release.outputs.linux_sha }}
+          ARM64_SHA: ${{ needs.release.outputs.darwin_arm64_sha }}
+          AMD64_SHA: ${{ needs.release.outputs.darwin_amd64_sha }}
+        run: |
+          V="${VERSION#v}"
+          mkdir -p homebrew-tap/Formula
+          cat > homebrew-tap/Formula/a2a-cli.rb <<FORMULA
+          class A2aCli < Formula
+            desc "Command-line client for the A2A (Agent-to-Agent) Protocol"
+            homepage "https://github.com/CodeYogiCo/a2a-probe"
+            license "MIT"
+            version "$V"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "https://github.com/CodeYogiCo/a2a-probe/releases/download/${VERSION}/a2a-cli-darwin-arm64"
+                sha256 "$ARM64_SHA"
+              else
+                url "https://github.com/CodeYogiCo/a2a-probe/releases/download/${VERSION}/a2a-cli-darwin-amd64"
+                sha256 "$AMD64_SHA"
+              end
+            end
+
+            on_linux do
+              url "https://github.com/CodeYogiCo/a2a-probe/releases/download/${VERSION}/a2a-cli-linux-amd64"
+              sha256 "$LINUX_SHA"
+            end
+
+            def install
+              on_macos do
+                if Hardware::CPU.arm?
+                  bin.install "a2a-cli-darwin-arm64" => "a2a-cli"
+                else
+                  bin.install "a2a-cli-darwin-amd64" => "a2a-cli"
+                end
+              end
+              on_linux do
+                bin.install "a2a-cli-linux-amd64" => "a2a-cli"
+              end
+            end
+
+            test do
+              assert_match "a2a-cli", shell_output("#{bin}/a2a-cli --help 2>&1")
+            end
+          end
+          FORMULA
+
+      - name: Commit and push formula
+        if: env.TAP_TOKEN != ''
+        run: |
+          cd homebrew-tap
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/a2a-cli.rb
+          git diff --cached --quiet || git commit -m "a2a-cli ${{ github.ref_name }}"
+          git push
