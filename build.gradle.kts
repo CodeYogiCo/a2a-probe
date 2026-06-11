@@ -116,6 +116,7 @@ graalvmNative {
             buildArgs.addAll(
                 "--no-fallback",
                 "-H:+ReportExceptionStackTraces",
+                "--initialize-at-build-time=kotlin",
             )
         }
     }
