@@ -92,6 +92,7 @@ class ChatHandler(
                         when (event) {
                             is StreamEvent.Status   -> terminal.printStreamStatus(event.event)
                             is StreamEvent.Artifact -> terminal.printStreamArtifact(event.event)
+                            is StreamEvent.Msg      -> terminal.printMessage(event.message)
                             is StreamEvent.Unknown  -> {}
                         }
                     }
@@ -138,6 +139,7 @@ class ChatHandler(
                     when (event) {
                         is StreamEvent.Status   -> terminal.printStreamStatus(event.event)
                         is StreamEvent.Artifact -> terminal.printStreamArtifact(event.event)
+                        is StreamEvent.Msg      -> terminal.printMessage(event.message)
                         is StreamEvent.Unknown  -> { /* ignore */ }
                     }
                 }

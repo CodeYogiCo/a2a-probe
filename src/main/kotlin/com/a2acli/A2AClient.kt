@@ -155,6 +155,11 @@ class A2AClient(private val transport: JsonRpcTransport) {
                     JsonObject(payload.filterKeys { it != "type" })
                 )
             )
+            // Plain message response (e.g. agents that reply to message/stream
+            // with a single kind:"message" event instead of status updates)
+            payload["kind"]?.jsonPrimitive?.content == "message" ||
+                (payload.containsKey("role") && payload.containsKey("parts")) ->
+                StreamEvent.Msg(json.decodeFromJsonElement(payload))
             else -> StreamEvent.Unknown(payload)
         }
     }
@@ -163,5 +168,6 @@ class A2AClient(private val transport: JsonRpcTransport) {
 sealed class StreamEvent {
     data class Status(val event: TaskStatusUpdateEvent) : StreamEvent()
     data class Artifact(val event: TaskArtifactUpdateEvent) : StreamEvent()
+    data class Msg(val message: Message) : StreamEvent()
     data class Unknown(val raw: JsonObject) : StreamEvent()
 }

@@ -21,7 +21,7 @@ class A2ACli : CliktCommand(
     name = "a2a-probe",
     help = "Command-line client for the A2A (Agent-to-Agent) Protocol v0.3.0",
 ) {
-    init { versionOption("0.1.14") }
+    init { versionOption("0.1.15") }
 
     private val server by option(
         "-s", "--server",
@@ -99,6 +99,7 @@ class SendCommand : CliktCommand(
                     when (event) {
                         is StreamEvent.Status   -> terminal.printStreamStatus(event.event)
                         is StreamEvent.Artifact -> terminal.printStreamArtifact(event.event)
+                        is StreamEvent.Msg      -> terminal.printMessage(event.message)
                         is StreamEvent.Unknown  -> {}
                     }
                 }
@@ -182,6 +183,7 @@ class WatchCommand : CliktCommand(
                 when (event) {
                     is StreamEvent.Status   -> terminal.printStreamStatus(event.event)
                     is StreamEvent.Artifact -> terminal.printStreamArtifact(event.event)
+                    is StreamEvent.Msg      -> terminal.printMessage(event.message)
                     is StreamEvent.Unknown  -> {}
                 }
             }
