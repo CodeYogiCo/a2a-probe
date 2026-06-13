@@ -21,7 +21,10 @@ class ChatHandler(
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     suspend fun run() {
-        val jlineTerminal = TerminalBuilder.builder().system(true).build()
+        // Silence JLine's "creating a dumb terminal" warning — the dumb fallback
+        // is expected in the GraalVM native binary and works fine for line input.
+        java.util.logging.Logger.getLogger("org.jline").level = java.util.logging.Level.OFF
+        val jlineTerminal = TerminalBuilder.builder().system(true).dumb(true).build()
         val reader = LineReaderBuilder.builder()
             .terminal(jlineTerminal)
             .appName("a2a-probe")
@@ -78,6 +81,7 @@ class ChatHandler(
                         put("text", message)
                     }
                 ),
+                messageId = UUID.randomUUID().toString(),
             ),
         )
 
