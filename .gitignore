@@ -1,3 +1,11 @@
+# Go build output
+a2a-probe
+a2a-probe-linux-amd64
+a2a-probe-darwin-arm64
+a2a-probe-windows-amd64.exe
+dist/
+
+# Kotlin/Gradle leftovers (kept for history)
 build/
 .gradle/
 *.class

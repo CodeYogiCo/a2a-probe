@@ -10,10 +10,9 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  # ── fat JAR build + unit tests ───────────────────────────────────────────────
+  # ── build + unit tests ───────────────────────────────────────────────────────
   build:
     runs-on: ubuntu-latest
     permissions:
@@ -22,58 +21,61 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          java-version: "21"
-          distribution: "temurin"
-          cache: gradle
+          go-version: "1.23"
+          cache: true
 
-      - name: Build fat JAR
-        run: ./gradlew shadowJar --no-daemon
+      - name: Build
+        run: go build -ldflags="-s -w" -o a2a-probe .
 
-      - name: Run unit tests
-        run: ./gradlew test --no-daemon
+      - name: Run tests
+        run: go test ./...
 
-      - name: Upload JAR artifact
+      - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
-          name: a2a-probe-jar
-          path: build/libs/a2a-probe.jar
+          name: a2a-probe-linux-amd64-debug
+          path: a2a-probe
           retention-days: 7
 
-  # ── GraalVM native binaries (3 platforms) ────────────────────────────────────
+  # ── cross-compile native binaries ────────────────────────────────────────────
   native-build:
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
-    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - goos: linux
+            goarch: amd64
             artifact: a2a-probe-linux-amd64
-          - os: macos-latest
+          - goos: darwin
+            goarch: arm64
             artifact: a2a-probe-darwin-arm64
-    runs-on: ${{ matrix.os }}
+          - goos: windows
+            goarch: amd64
+            artifact: a2a-probe-windows-amd64.exe
+    runs-on: ubuntu-latest
     permissions:
       contents: read
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up GraalVM 21 (Community)
-        uses: graalvm/setup-graalvm@v1
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          java-version: "21"
-          distribution: "graalvm-community"
-          cache: "gradle"
+          go-version: "1.23"
+          cache: true
 
-      - name: Build native image
-        run: ./gradlew nativeCompile --no-daemon
-
-      - name: Rename binary
-        run: mv build/native/nativeCompile/a2a-probe ${{ matrix.artifact }}
+      - name: Build ${{ matrix.artifact }}
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: go build -ldflags="-s -w" -o ${{ matrix.artifact }} .
 
       - name: Upload native artifact
         uses: actions/upload-artifact@v4
@@ -81,32 +83,6 @@ jobs:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.artifact }}
           retention-days: 7
-
-  # ── publish JAR to GitHub Packages ──────────────────────────────────────────
-  publish-jar:
-    needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          java-version: "21"
-          distribution: "temurin"
-          cache: gradle
-
-      - name: Publish JAR to GitHub Packages
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_ACTOR: ${{ github.actor }}
-          RELEASE_VERSION: ${{ github.ref_name }}
-        run: ./gradlew publish --no-daemon
 
   # ── publish Docker image to GHCR ────────────────────────────────────────────
   publish-docker:
@@ -145,9 +121,9 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-  # ── GitHub Release with JAR + all native binaries ───────────────────────────
+  # ── GitHub Release with all binaries ────────────────────────────────────────
   release:
-    needs: [publish-jar, publish-docker, native-build]
+    needs: [publish-docker, native-build]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
@@ -157,11 +133,6 @@ jobs:
       darwin_arm64_sha: ${{ steps.sha.outputs.darwin_arm64 }}
 
     steps:
-      - name: Download JAR
-        uses: actions/download-artifact@v4
-        with:
-          name: a2a-probe-jar
-
       - name: Download linux binary
         uses: actions/download-artifact@v4
         with:
@@ -171,6 +142,11 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: a2a-probe-darwin-arm64
+
+      - name: Download Windows binary
+        uses: actions/download-artifact@v4
+        with:
+          name: a2a-probe-windows-amd64.exe
 
       - name: Calculate SHA256
         id: sha
@@ -183,11 +159,11 @@ jobs:
         with:
           generate_release_notes: true
           files: |
-            a2a-probe.jar
             a2a-probe-linux-amd64
             a2a-probe-darwin-arm64
+            a2a-probe-windows-amd64.exe
 
-  # ── update Homebrew formula in CodeYogiCo/homebrew-tap ──────────────────────
+  # ── update Homebrew formula ──────────────────────────────────────────────────
   update-homebrew-tap:
     needs: release
     if: startsWith(github.ref, 'refs/tags/v')
