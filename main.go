@@ -2,7 +2,10 @@ package main
 
 import (
 	"bufio"
+	"embed"
 	"fmt"
+	"io/fs"
+	"net/http"
 	"os"
 	"strings"
 
@@ -10,10 +13,14 @@ import (
 	"github.com/codeyogico/a2a-probe/internal/client"
 	"github.com/codeyogico/a2a-probe/internal/config"
 	"github.com/codeyogico/a2a-probe/internal/model"
+	"github.com/codeyogico/a2a-probe/internal/server"
 	"github.com/codeyogico/a2a-probe/internal/ui"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
+
+//go:embed web
+var webFS embed.FS
 
 const version = "0.2.0"
 
@@ -44,6 +51,7 @@ func main() {
 		newWatchCmd(),
 		newChatCmd(),
 		newStdioCmd(),
+		newServeCmd(),
 		newConfigCmd(),
 	)
 
@@ -248,6 +256,28 @@ func newStdioCmd() *cobra.Command {
 			return scanner.Err()
 		},
 	}
+}
+
+// ── serve ─────────────────────────────────────────────────────────────────────
+
+func newServeCmd() *cobra.Command {
+	var port int
+	cmd := &cobra.Command{
+		Use:   "serve",
+		Short: "Start a local web UI for interacting with A2A agents",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			sub, err := fs.Sub(webFS, "web")
+			if err != nil {
+				return err
+			}
+			srv := server.New(sub)
+			addr := fmt.Sprintf(":%d", port)
+			ui.PrintSuccess(fmt.Sprintf("Web UI → http://localhost%s", addr))
+			return http.ListenAndServe(addr, srv.Handler())
+		},
+	}
+	cmd.Flags().IntVarP(&port, "port", "p", 7070, "Port to listen on")
+	return cmd
 }
 
 // ── config ────────────────────────────────────────────────────────────────────
