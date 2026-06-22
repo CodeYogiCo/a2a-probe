@@ -1,19 +1,19 @@
 # a2a-probe
 
-A command-line client for the [A2A (Agent-to-Agent) Protocol](https://google.github.io/A2A/) v0.3.0, written in Kotlin.
+A command-line client for the [A2A (Agent-to-Agent) Protocol](https://google.github.io/A2A/) v0.3.0, written in Go.
+
+> Ported from the original Kotlin/GraalVM implementation. The Go build produces a small, statically-linked binary with no runtime dependencies.
 
 ## Installation
 
-### Homebrew (macOS / Linux — no JVM required)
+### Homebrew (macOS / Linux)
 
 ```bash
 brew tap CodeYogiCo/tap
 brew install a2a-probe
 ```
 
-This installs a native binary compiled with GraalVM — no Java needed.
-
-### Docker (recommended for containers)
+### Docker
 
 ```bash
 docker pull ghcr.io/codeyogico/a2a-probe:latest
@@ -27,15 +27,26 @@ alias a2a='docker run --rm ghcr.io/codeyogico/a2a-probe'
 a2a send "Hello"
 ```
 
-### Pre-built JAR
+### Pre-built binaries
 
-Download the latest `a2a-probe.jar` from the [Releases page](https://github.com/CodeYogiCo/a2a-probe/releases) and run it with:
+Download the binary for your platform from the [Releases page](https://github.com/CodeYogiCo/a2a-probe/releases):
+
+- `a2a-probe-linux-amd64`
+- `a2a-probe-darwin-arm64`
+- `a2a-probe-windows-amd64.exe`
+
+Make it executable and put it on your `$PATH`:
 
 ```bash
-java -jar a2a-probe.jar [OPTIONS] COMMAND
+chmod +x a2a-probe-darwin-arm64
+mv a2a-probe-darwin-arm64 /usr/local/bin/a2a-probe
 ```
 
-Requires JDK 21+.
+### go install
+
+```bash
+go install github.com/codeyogico/a2a-probe@latest
+```
 
 ### Build from source
 
@@ -45,42 +56,43 @@ See the [Build](#build) section below.
 
 - Send tasks, stream responses, watch live updates, and chat interactively with any A2A-compatible agent
 - Four transport protocols: HTTP, SSE, WebSocket, stdio
+- Built-in web UI (`serve`) for browser-based interaction
 - Named server config stored at `~/.a2a/config.json`
-- Rich terminal output via [Mordant](https://github.com/ajalt/mordant)
-- Single fat JAR via Gradle Shadow, Docker image included
+- Single statically-linked binary; scratch-based Docker image included
 
 ## Requirements
 
-- JDK 21+ (only needed for JAR/source builds; Homebrew install requires no JVM)
-- Gradle (or use the included `./gradlew` wrapper)
+- Go 1.23+ (only needed for source/`go install` builds; Homebrew and binary installs need nothing)
 
 ## Build
 
 ```bash
-./gradlew shadowJar
+go build -ldflags="-s -w" -o a2a-probe .
 ```
 
-Produces `build/libs/a2a-probe.jar`.
-
-### Native binary (GraalVM)
+Cross-compile for another platform:
 
 ```bash
-./gradlew nativeCompile
+GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o a2a-probe-linux-amd64 .
 ```
 
-Produces `build/native/nativeCompile/a2a-probe` — a standalone binary with no JVM dependency.
-Requires GraalVM 21 on `$PATH` (e.g. `sdk install java 21.0.7-graalce` via SDKMAN).
+Run the tests:
+
+```bash
+go test ./...
+```
 
 ## Usage
 
 ```
-java -jar a2a-probe.jar [OPTIONS] COMMAND
+a2a-probe [OPTIONS] COMMAND
 
 Options:
   -s, --server TEXT     Server URL or config alias (default: http://localhost:8000)
   -t, --transport TEXT  Transport: http | sse | ws | stdio (default: http)
-  --debug               Enable debug logging
+      --debug           Enable debug logging
   -q, --quiet           Suppress non-essential output
+      --version         Print version and exit
 ```
 
 ### Commands
@@ -89,12 +101,13 @@ Options:
 |---------|-------------|
 | `send <message>` | Send a task and print the result |
 | `send --stream <message>` | Send a task and stream updates |
-| `get <task-id>` | Retrieve a task by ID |
+| `get <task-id>` | Retrieve a task by ID (`--with-history`, `--history N`) |
 | `cancel <task-id>` | Cancel a running task |
 | `watch <task-id>` | Stream live updates for an existing task |
 | `chat` | Interactive chat mode |
+| `serve` | Start a local web UI (`--port`, default 7070) |
 | `stdio` | JSON-RPC 2.0 over stdin/stdout for CI/CD pipelines |
-| `config add <name> <url>` | Save a named server |
+| `config add <name> <url>` | Save a named server (`--transport`) |
 | `config remove <name>` | Remove a named server |
 | `config list` | List all configured servers |
 
@@ -102,19 +115,22 @@ Options:
 
 ```bash
 # Send a one-shot task
-java -jar a2a-probe.jar send "Summarise this repo"
+a2a-probe send "Summarise this repo"
 
 # Stream the response
-java -jar a2a-probe.jar send --stream "Write a haiku"
+a2a-probe send --stream "Write a haiku"
 
 # Use SSE transport against a named server
-java -jar a2a-probe.jar -s myagent -t sse send "Hello"
+a2a-probe -s myagent -t sse send "Hello"
 
 # Save a server alias
-java -jar a2a-probe.jar config add myagent http://localhost:9000
+a2a-probe config add myagent http://localhost:9000
 
 # Interactive chat
-java -jar a2a-probe.jar chat
+a2a-probe chat
+
+# Browser-based web UI on port 7070
+a2a-probe serve
 ```
 
 ## Docker
@@ -123,6 +139,15 @@ java -jar a2a-probe.jar chat
 docker build -t a2a-probe .
 docker run --rm a2a-probe send "Hello"
 ```
+
+## Status / Known gaps
+
+The Go port is functional but a few things from the original are not yet wired up:
+
+- **`--debug` / `--quiet`** — the flags are accepted but do not yet change logging behaviour.
+- **`stdio` command** — currently echoes input line-by-line as a placeholder; the full JSON-RPC 2.0 bridge is not implemented yet.
+
+Contributions welcome.
 
 ## License
 
