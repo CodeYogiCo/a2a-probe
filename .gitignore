@@ -5,10 +5,6 @@ a2a-probe-darwin-arm64
 a2a-probe-windows-amd64.exe
 dist/
 
-# Kotlin/Gradle leftovers (kept for history)
-build/
-.gradle/
-*.class
-*.jar
-!gradle/wrapper/gradle-wrapper.jar
-local.properties
+# Go workspace / test artifacts
+*.test
+*.out

@@ -194,7 +194,7 @@ jobs:
           V="${VERSION#v}"
           mkdir -p homebrew-tap/Formula
           cat > homebrew-tap/Formula/a2a-probe.rb <<FORMULA
-          class A2aCli < Formula
+          class A2aProbe < Formula
             desc "Command-line client for the A2A (Agent-to-Agent) Protocol"
             homepage "https://github.com/CodeYogiCo/a2a-probe"
             license "MIT"
