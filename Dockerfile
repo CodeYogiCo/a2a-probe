@@ -1,15 +1,13 @@
 # ── build stage ───────────────────────────────────────────────────────────────
-FROM eclipse-temurin:21-jdk-alpine AS builder
+FROM golang:1.23-alpine AS builder
 WORKDIR /build
-COPY gradle gradle
-COPY gradlew gradlew
-COPY settings.gradle.kts settings.gradle.kts
-COPY build.gradle.kts build.gradle.kts
-COPY src src
-RUN chmod +x gradlew && ./gradlew shadowJar --no-daemon -q
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o a2a-probe .
 
 # ── runtime stage ─────────────────────────────────────────────────────────────
-FROM eclipse-temurin:21-jre-alpine
-WORKDIR /app
-COPY --from=builder /build/build/libs/a2a-probe.jar a2a-probe.jar
-ENTRYPOINT ["java", "-jar", "a2a-probe.jar"]
+FROM scratch
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=builder /build/a2a-probe /a2a-probe
+ENTRYPOINT ["/a2a-probe"]
