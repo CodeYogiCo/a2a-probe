@@ -233,7 +233,8 @@ async function connect() {
 }
 
 function setConn(on) {
-  $('dot').className = 'dot' + (on ? ' on' : '')
+  // Rebuilds the whole label (incl. the status dot) so it stays correct on
+  // repeated calls — don't reference #dot separately, this innerHTML replaces it.
   $('conn-label').innerHTML = '<span class="dot' + (on ? ' on' : '') + '"></span>&nbsp;' + (on ? esc(srv()) : 'disconnected')
 }
 

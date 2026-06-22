@@ -22,7 +22,7 @@ import (
 //go:embed web
 var webFS embed.FS
 
-const version = "0.2.0"
+const version = "0.2.1"
 
 var (
 	flagServer    string
@@ -114,7 +114,11 @@ func newSendCmd() *cobra.Command {
 
 			resp, err := c.SendMessage(msg)
 			if err == nil {
-				ui.PrintMessage(resp, "")
+				if resp.Task != nil {
+					ui.PrintTask(resp.Task)
+				} else {
+					ui.PrintMessage(resp.Message, "")
+				}
 				return nil
 			}
 			task, err := c.SendTask(params)
