@@ -140,14 +140,54 @@ docker build -t a2a-probe .
 docker run --rm a2a-probe send "Hello"
 ```
 
-## Status / Known gaps
+## A2A protocol support
 
-The Go port is functional but a few things from the original are not yet wired up:
+What the client implements today, mapped to the [A2A specification](https://a2a-protocol.org/latest/specification/).
 
-- **`--debug` / `--quiet`** — the flags are accepted but do not yet change logging behaviour.
-- **`stdio` command** — currently echoes input line-by-line as a placeholder; the full JSON-RPC 2.0 bridge is not implemented yet.
+### Transports (protocol bindings)
 
-Contributions welcome.
+| Binding | Spec | Supported |
+|---------|:----:|:---------:|
+| JSON-RPC 2.0 over HTTP(S) | ✅ standard | ✅ `-t http` |
+| SSE streaming (over the JSON-RPC binding) | ✅ | ✅ `-t sse` |
+| gRPC | ✅ standard | ❌ planned |
+| HTTP+JSON / REST | ✅ standard | ❌ planned |
+| WebSocket | ⚠️ non-standard | ✅ `-t ws` (extra) |
+| stdio | ⚠️ non-standard | ✅ `-t stdio` (transport only) |
+
+### Methods / interaction patterns
+
+| Operation | RPC method | Supported |
+|-----------|------------|:---------:|
+| Send message (sync) | `message/send` | ✅ `send` |
+| Send streaming message | `message/stream` | ✅ `send --stream` |
+| Get task | `tasks/get` | ✅ `get` |
+| Cancel task | `tasks/cancel` | ✅ `cancel` |
+| Resubscribe to a task stream | `tasks/resubscribe` | ✅ `watch` |
+| List tasks | `tasks/list` | ❌ planned |
+| Push notification config (set/get/list/delete) | `tasks/pushNotificationConfig/*` | ❌ planned |
+| Authenticated extended agent card | — | ❌ planned |
+| Legacy send / sendSubscribe | `tasks/send`, `tasks/sendSubscribe` | ✅ automatic fallback |
+
+### Content & discovery
+
+- **Message/artifact parts:** `text`, `file` (bytes or URI), `data` (structured JSON) — all rendered.
+- **Streaming events:** `TaskStatusUpdateEvent`, `TaskArtifactUpdateEvent`.
+- **Agent card discovery:** fetched from `/.well-known/agent.json`.
+- **Multi-turn:** supported implicitly via the server's task/context continuation; no dedicated CLI affordance yet.
+
+## Roadmap / planned
+
+Not yet implemented, roughly in priority order:
+
+- **Push notifications** — register a webhook (`tasks/pushNotificationConfig/set`) plus a built-in receiver command to observe agent callbacks end-to-end.
+- **Agent-card path** — also probe the newer `/.well-known/agent-card.json` location (renamed in later spec revisions), with fallback.
+- **`--debug` / `--quiet`** — flags are accepted but do not yet change logging behaviour.
+- **`stdio` command** — currently echoes input line-by-line as a placeholder; the full JSON-RPC 2.0 bridge is not implemented.
+- **`tasks/list`** and **authenticated extended card** retrieval.
+- **gRPC / REST** transport bindings.
+
+Contributions welcome — see [AGENTS.md](AGENTS.md) for architecture and development guidance.
 
 ## License
 
