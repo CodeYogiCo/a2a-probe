@@ -40,18 +40,47 @@ func marshal(v interface{}) json.RawMessage {
 	return b
 }
 
+// SendResult is the result of a message/send call. Per the A2A spec the agent
+// may answer with either a Message or a Task, so exactly one field is set.
+type SendResult struct {
+	Message *model.Message
+	Task    *model.Task
+}
+
 // SendMessage implements the message/send RPC (A2A ≥0.4).
-func (c *A2AClient) SendMessage(msg model.Message) (*model.Message, error) {
+func (c *A2AClient) SendMessage(msg model.Message) (*SendResult, error) {
 	params := map[string]interface{}{"message": msg}
 	raw, err := c.t.Call("message/send", marshal(params))
 	if err != nil {
 		return nil, err
 	}
+	return parseSendResult(raw)
+}
+
+// parseSendResult decodes a message/send result, which is either a Message or a
+// Task. It discriminates on "kind"; some agents omit it, so it falls back to
+// structural detection: a "status" object with no "parts" is a Task.
+func parseSendResult(raw json.RawMessage) (*SendResult, error) {
+	var probe struct {
+		Kind   string          `json:"kind"`
+		Status json.RawMessage `json:"status"`
+		Parts  json.RawMessage `json:"parts"`
+	}
+	if err := json.Unmarshal(raw, &probe); err != nil {
+		return nil, err
+	}
+	if probe.Kind == "task" || (probe.Kind == "" && probe.Status != nil && probe.Parts == nil) {
+		var t model.Task
+		if err := json.Unmarshal(raw, &t); err != nil {
+			return nil, err
+		}
+		return &SendResult{Task: &t}, nil
+	}
 	var m model.Message
 	if err := json.Unmarshal(raw, &m); err != nil {
 		return nil, err
 	}
-	return &m, nil
+	return &SendResult{Message: &m}, nil
 }
 
 // StreamMessage implements the message/stream RPC (A2A ≥0.4).

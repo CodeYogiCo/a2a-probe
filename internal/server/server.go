@@ -106,7 +106,11 @@ func (s *Server) send(w http.ResponseWriter, r *http.Request) {
 
 	if !req.Legacy {
 		if resp, err := c.SendMessage(msg); err == nil {
-			writeJSON(w, map[string]interface{}{"message": resp})
+			if resp.Task != nil {
+				writeJSON(w, map[string]interface{}{"task": resp.Task})
+			} else {
+				writeJSON(w, map[string]interface{}{"message": resp.Message})
+			}
 			return
 		}
 	}

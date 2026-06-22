@@ -114,7 +114,11 @@ func newSendCmd() *cobra.Command {
 
 			resp, err := c.SendMessage(msg)
 			if err == nil {
-				ui.PrintMessage(resp, "")
+				if resp.Task != nil {
+					ui.PrintTask(resp.Task)
+				} else {
+					ui.PrintMessage(resp.Message, "")
+				}
 				return nil
 			}
 			task, err := c.SendTask(params)

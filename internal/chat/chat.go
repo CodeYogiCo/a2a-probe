@@ -110,7 +110,11 @@ func (h *Handler) handleSend(text string, card *model.AgentCard) {
 		ui.PrintTask(task)
 		return
 	}
-	ui.PrintMessage(resp, "")
+	if resp.Task != nil {
+		ui.PrintTask(resp.Task)
+	} else {
+		ui.PrintMessage(resp.Message, "")
+	}
 }
 
 func (h *Handler) handleGet(taskID string) {

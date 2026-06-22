@@ -96,6 +96,55 @@ func TestPartTextNonText(t *testing.T) {
 	}
 }
 
+// ── parseSendResult ───────────────────────────────────────────────────────────
+
+func TestParseSendResultMessage(t *testing.T) {
+	raw := json.RawMessage(`{"kind":"message","role":"agent","parts":[{"kind":"text","text":"hi"}]}`)
+	res, err := parseSendResult(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Task != nil || res.Message == nil {
+		t.Fatalf("want Message, got %+v", res)
+	}
+	if ExtractText(res.Message.Parts) != "hi" {
+		t.Errorf("text: want 'hi', got %q", ExtractText(res.Message.Parts))
+	}
+}
+
+func TestParseSendResultTaskByKind(t *testing.T) {
+	// Agent answers message/send with a Task carrying the content in artifacts.
+	raw := json.RawMessage(`{"kind":"task","id":"t9","status":{"state":"completed"},"artifacts":[{"index":0,"parts":[{"kind":"text","text":"red dress"}]}]}`)
+	res, err := parseSendResult(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Message != nil || res.Task == nil {
+		t.Fatalf("want Task, got %+v", res)
+	}
+	if res.Task.ID != "t9" {
+		t.Errorf("id: want t9, got %s", res.Task.ID)
+	}
+	if len(res.Task.Artifacts) != 1 {
+		t.Fatalf("artifacts: want 1, got %d", len(res.Task.Artifacts))
+	}
+}
+
+func TestParseSendResultTaskWithoutKind(t *testing.T) {
+	// Some agents omit "kind"; a status object with no parts is still a Task.
+	raw := json.RawMessage(`{"id":"t10","status":{"state":"working"}}`)
+	res, err := parseSendResult(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Task == nil {
+		t.Fatalf("want Task via structural detection, got %+v", res)
+	}
+	if res.Task.Status.State != model.TaskStateWorking {
+		t.Errorf("state: want working, got %s", res.Task.Status.State)
+	}
+}
+
 // ── coerceStreamEvent ─────────────────────────────────────────────────────────
 
 func TestCoerceStreamEventStatus(t *testing.T) {
