@@ -103,6 +103,10 @@ textarea#ti:focus{border-color:var(--accent)}
 code{background:var(--bg3);border:1px solid var(--border);padding:1px 4px;border-radius:3px;font-size:11px}
 ::-webkit-scrollbar{width:5px}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.debug-panel{border-top:1px solid var(--border);background:var(--bg2);display:flex;flex-direction:column;max-height:38%}
+.debug-head{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 12px;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em}
+.debug-body{margin:0;padding:6px 12px;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;line-height:1.5;color:var(--dim);white-space:pre-wrap;word-break:break-all}
+#debug-btn.on{color:var(--cyan);border-color:var(--cyan)}
 </style>
 </head>
 <body>
@@ -113,6 +117,7 @@ code{background:var(--bg3);border:1px solid var(--border);padding:1px 4px;border
     <span id="conn-label"><span class="dot" id="dot"></span>&nbsp;disconnected</span>
   </div>
   <div class="right">
+    <button class="btn-sm" id="debug-btn">&#9881; debug</button>
     <button class="btn-sm" id="theme-btn">&#9788; light</button>
   </div>
 </div>
@@ -173,6 +178,17 @@ code{background:var(--bg3);border:1px solid var(--border);padding:1px 4px;border
         <button class="send-btn" id="send-btn" disabled>Send</button>
       </div>
     </div>
+
+    <div class="debug-panel" id="debug-panel" style="display:none">
+      <div class="debug-head">
+        <span>debug log — live wire trace</span>
+        <span>
+          <button class="btn-sm" id="debug-clear">clear</button>
+          <button class="btn-sm" id="debug-close">close</button>
+        </span>
+      </div>
+      <pre class="debug-body" id="debug-body"></pre>
+    </div>
   </div>
 </div>
 
@@ -223,6 +239,7 @@ async function connect() {
     $('send-btn').disabled = false
     localStorage.setItem('a2a.server', srv())
     localStorage.setItem('a2a.transport', tsp())
+    okMsg('Connected to ' + srv())
     renderCard(d.card)
   } catch(e) {
     errMsg('Connection failed: ' + e.message)
@@ -239,7 +256,7 @@ function setConn(on) {
 }
 
 function renderCard(card) {
-  if (!card) { $('card-area').style.display = 'none'; sysMsg('Connected (no agent card).'); return }
+  if (!card) { $('card-area').style.display = 'none'; sysMsg('No agent card available.'); return }
   let h = ''
   if (card.name) h += '<div class="name">' + esc(card.name) + '</div>'
   if (card.version) h += '<div style="color:var(--dim)">v' + esc(card.version) + '</div>'
@@ -251,6 +268,35 @@ function renderCard(card) {
   $('card-box').innerHTML = h
   $('card-area').style.display = 'block'
   sysMsg('Agent: ' + (card.name || '(unnamed)') + (card.version ? ' v' + card.version : ''))
+}
+
+// ── debug panel ─────────────────────────────────────────────────────────────
+let debugES = null
+$('debug-btn').addEventListener('click', () => setDebug(!debugES))
+$('debug-close').addEventListener('click', () => setDebug(false))
+$('debug-clear').addEventListener('click', () => { $('debug-body').textContent = '' })
+
+async function setDebug(on) {
+  try {
+    await fetch('/api/debug/toggle', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({enabled: on})
+    })
+  } catch(e) { errMsg('Debug toggle failed: ' + e.message) }
+
+  $('debug-btn').classList.toggle('on', on)
+  $('debug-panel').style.display = on ? 'flex' : 'none'
+
+  if (on && !debugES) {
+    debugES = new EventSource('/api/debug/stream')
+    debugES.onmessage = e => {
+      const body = $('debug-body')
+      body.textContent += JSON.parse(e.data) + '\n'
+      body.scrollTop = body.scrollHeight
+    }
+  } else if (!on && debugES) {
+    debugES.close(); debugES = null
+  }
 }
 
 // ── send ──────────────────────────────────────────────────────────────────────
@@ -308,8 +354,13 @@ async function streamSend(text) {
 }
 
 function onStreamEvent(ev) {
-  if (ev.type === 'status') {
+  if (ev.type === 'task') {
+    // A full Task snapshot delivered mid-stream.
+    if (streaming) { streaming.querySelector('.cursor')?.remove(); streaming.classList.remove('streaming'); streaming = null }
+    renderTask(ev.data)
+  } else if (ev.type === 'status') {
     const s = ev.data
+    captureTaskId(s?.id)
     const state = s?.status?.state || 'unknown'
     const txt = textFromParts(s?.status?.message?.parts)
     if (!streaming) streaming = mkStreamMsg()
@@ -322,6 +373,7 @@ function onStreamEvent(ev) {
     if (txt) span.textContent = txt
     if (s?.final) { body.querySelector('.cursor')?.remove(); streaming.classList.remove('streaming'); streaming = null }
   } else if (ev.type === 'artifact') {
+    captureTaskId(ev.data?.id)
     const parts = ev.data?.artifact?.parts
     const txt = textFromParts(parts); if (!txt) return
     if (!streaming) streaming = mkStreamMsg()
@@ -376,6 +428,7 @@ function renderMessage(msg) {
 
 function renderTask(task) {
   if (!task) return
+  captureTaskId(task.id)
   const state = task.status?.state || 'unknown'
   let txt = '[' + state + '] ' + task.id
   const m = task.status?.message
@@ -395,7 +448,19 @@ function addMsg(role, text) {
 }
 
 function sysMsg(text) { rmEmpty(); const el=document.createElement('div'); el.className='msg system'; el.innerHTML='<div class="role">system</div><div class="body">'+esc(text)+'</div>'; $('msgs').appendChild(el); scroll() }
+function okMsg(text) { rmEmpty(); const el=document.createElement('div'); el.className='msg system'; el.innerHTML='<div class="role" style="color:#3fb950">connected</div><div class="body">'+esc(text)+'</div>'; $('msgs').appendChild(el); scroll() }
 function errMsg(text) { rmEmpty(); const el=document.createElement('div'); el.className='msg error_'; el.innerHTML='<div class="role">error</div><div class="body">'+esc(text)+'</div>'; $('msgs').appendChild(el); scroll() }
+
+// captureTaskId fills the task-id field (used by Get/Cancel) the first time a
+// task id is seen, so it's easy to find after sending.
+function captureTaskId(id) {
+  if (!id) return
+  const f = $('task-id')
+  if (f && f.value.trim() !== id) {
+    f.value = id
+    sysMsg('Task id: ' + id + '  — filled into the task field (use Get / Cancel)')
+  }
+}
 function rmEmpty() { $('empty')?.remove() }
 function scroll() { const m=$('msgs'); m.scrollTop=m.scrollHeight }
 

@@ -239,7 +239,9 @@ as it arrives (with timestamps). stdout stays clean, so you can still pipe resul
 a2a-probe --debug send --stream "hello" 2>debug.log
 ```
 
-Debug tracing also covers the `serve` web UI's `/api/*` calls.
+Debug tracing also covers the `serve` web UI's `/api/*` calls. In the web UI,
+the **⚙ debug** toggle turns tracing on at runtime and streams the live log into
+an on-page panel — no terminal needed.
 
 ## Roadmap / planned
 

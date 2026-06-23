@@ -33,6 +33,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/stream", s.stream)
 	mux.HandleFunc("/api/task", s.getTask)
 	mux.HandleFunc("/api/cancel", s.cancel)
+	mux.HandleFunc("/api/debug/toggle", s.debugToggle)
+	mux.HandleFunc("/api/debug/stream", s.debugStream)
 	return debugLog(mux)
 }
 
@@ -194,12 +196,54 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 
 	for ev := range ch {
 		switch {
+		case ev.Task != nil:
+			emit("task", ev.Task)
 		case ev.Status != nil:
 			emit("status", ev.Status)
 		case ev.Artifact != nil:
 			emit("artifact", ev.Artifact)
 		case ev.Message != nil:
 			emit("message", ev.Message)
+		}
+	}
+}
+
+// POST /api/debug/toggle  — body {"enabled": true|false}
+func (s *Server) debugToggle(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Enabled bool `json:"enabled"`
+	}
+	json.NewDecoder(r.Body).Decode(&body)
+	debug.SetEnabled(body.Enabled)
+	debug.Logf("debug logging %s via web UI", map[bool]string{true: "enabled", false: "disabled"}[body.Enabled])
+	writeJSON(w, map[string]interface{}{"enabled": body.Enabled})
+}
+
+// GET /api/debug/stream  — Server-Sent Events of debug log lines.
+func (s *Server) debugStream(w http.ResponseWriter, r *http.Request) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeErr(w, "streaming not supported", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	lines, cancel := debug.Subscribe()
+	defer cancel()
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case line, ok := <-lines:
+			if !ok {
+				return
+			}
+			b, _ := json.Marshal(line)
+			fmt.Fprintf(w, "data: %s\n\n", b)
+			flusher.Flush()
 		}
 	}
 }
