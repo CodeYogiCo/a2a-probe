@@ -2,6 +2,7 @@ package ui
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -66,5 +67,25 @@ func TestAnsiHelpers(t *testing.T) {
 		if len(result) == 0 {
 			t.Errorf("%s: should not be empty", name)
 		}
+	}
+}
+
+func TestPrettyJSON(t *testing.T) {
+	got := prettyJSON(json.RawMessage(`{"b":2,"a":[1,2]}`))
+	// Indented output spans multiple lines.
+	if !strings.Contains(got, "\n") {
+		t.Errorf("expected multi-line indented JSON, got %q", got)
+	}
+	// Still valid JSON after indenting.
+	var v map[string]interface{}
+	if err := json.Unmarshal([]byte(got), &v); err != nil {
+		t.Errorf("pretty output is not valid JSON: %v", err)
+	}
+}
+
+func TestPrettyJSONInvalidFallback(t *testing.T) {
+	got := prettyJSON(json.RawMessage(`not json`))
+	if got != "not json" {
+		t.Errorf("want passthrough of invalid input, got %q", got)
 	}
 }

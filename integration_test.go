@@ -55,7 +55,10 @@ func fakeA2AServer(t *testing.T) *httptest.Server {
 			w.Header().Set("Content-Type", "application/json")
 			io.WriteString(w, `{"jsonrpc":"2.0","id":"`+env.ID+`","result":{`+
 				`"kind":"task","id":"task-42","status":{"state":"completed"},`+
-				`"artifacts":[{"index":0,"parts":[{"kind":"text","text":"red dress, blue dress"}]}]}}`)
+				`"artifacts":[{"index":0,"parts":[`+
+				`{"kind":"text","text":"red dress, blue dress"},`+
+				`{"kind":"data","data":{"results":[{"name":"red dress","price":42}]}}`+
+				`]}]}}`)
 
 		case "message/stream":
 			w.Header().Set("Content-Type", "text/event-stream")
@@ -92,6 +95,11 @@ func TestSendTaskOverHTTP(t *testing.T) {
 	out := run(t, "-s", srv.URL, "send", "find me dresses")
 	if !strings.Contains(out, "red dress, blue dress") {
 		t.Errorf("expected artifact text in output, got:\n%s", out)
+	}
+	// The structured data part should be pretty-printed (indented), not dumped
+	// as a single line.
+	if !strings.Contains(out, "\"price\": 42") {
+		t.Errorf("expected pretty-printed data part in output, got:\n%s", out)
 	}
 }
 
