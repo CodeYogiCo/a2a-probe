@@ -12,6 +12,7 @@ import (
 	"github.com/codeyogico/a2a-probe/internal/chat"
 	"github.com/codeyogico/a2a-probe/internal/client"
 	"github.com/codeyogico/a2a-probe/internal/config"
+	"github.com/codeyogico/a2a-probe/internal/debug"
 	"github.com/codeyogico/a2a-probe/internal/model"
 	"github.com/codeyogico/a2a-probe/internal/server"
 	"github.com/codeyogico/a2a-probe/internal/ui"
@@ -22,7 +23,7 @@ import (
 //go:embed web
 var webFS embed.FS
 
-const version = "0.2.2"
+const version = "0.2.3"
 
 var (
 	flagServer    string
@@ -43,6 +44,13 @@ func main() {
 		"Transport: http | sse | ws | stdio")
 	root.PersistentFlags().BoolVar(&flagDebug, "debug", false, "Enable debug logging")
 	root.PersistentFlags().BoolVarP(&flagQuiet, "quiet", "q", false, "Suppress non-essential output")
+
+	root.PersistentPreRun = func(cmd *cobra.Command, args []string) {
+		if flagDebug {
+			debug.Enable()
+			debug.Logf("debug logging enabled (transport=%s)", flagTransport)
+		}
+	}
 
 	root.AddCommand(
 		newSendCmd(),
@@ -365,12 +373,16 @@ func newConfigListCmd() *cobra.Command {
 
 func printEvent(ev client.StreamEvent) {
 	switch {
+	case ev.Task != nil:
+		ui.PrintTask(ev.Task)
 	case ev.Status != nil:
 		ui.PrintStreamStatus(ev.Status)
 	case ev.Artifact != nil:
 		ui.PrintStreamArtifact(ev.Artifact)
 	case ev.Message != nil:
 		ui.PrintMessage(ev.Message, "")
+	case ev.Raw != nil:
+		debug.Logf("unhandled stream event: %s", debug.Truncate(string(ev.Raw), 2000))
 	}
 }
 

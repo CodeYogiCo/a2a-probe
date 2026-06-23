@@ -152,6 +152,8 @@ func (h *Handler) handleWatch(taskID string) {
 
 func handleEvent(ev client.StreamEvent) {
 	switch {
+	case ev.Task != nil:
+		ui.PrintTask(ev.Task)
 	case ev.Status != nil:
 		ui.PrintStreamStatus(ev.Status)
 	case ev.Artifact != nil:

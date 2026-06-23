@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codeyogico/a2a-probe/internal/debug"
 	"github.com/google/uuid"
 )
 
@@ -57,27 +58,34 @@ func (t *HTTPTransport) Call(method string, params json.RawMessage) (json.RawMes
 		req.Header.Set("Accept", "text/event-stream")
 	}
 
+	debug.Logf("→ HTTP POST %s  method=%s", t.endpoint, method)
+	debug.Logf("  request: %s", debug.Truncate(string(body), 2000))
+
 	resp, err := t.client.Do(req)
 	if err != nil {
+		debug.Logf("  transport error: %v", err)
 		return nil, err
 	}
 
 	ct := resp.Header.Get("Content-Type")
+	debug.Logf("← HTTP %d  Content-Type=%s", resp.StatusCode, ct)
+
 	if strings.Contains(ct, "text/event-stream") {
-		// Read the SSE stream incrementally. The first data payload is returned
-		// as the Call result; Stream() reads the rest as it arrives.
 		scanner := newSSEScanner(resp.Body)
-		first, ok := nextSSEData(scanner)
-		if !ok {
-			resp.Body.Close()
-			return nil, &RPCError{Code: -32000, Message: "empty SSE stream"}
-		}
 		if isStreaming {
+			// Keep the body open; Stream() emits every event (including the
+			// first) as it arrives.
 			t.streamBody = resp.Body
 			t.streamScanner = scanner
-		} else {
-			resp.Body.Close()
+			return json.RawMessage("null"), nil
 		}
+		// A non-streaming method that answered with SSE: return the first event.
+		first, ok := nextSSEData(scanner)
+		resp.Body.Close()
+		if !ok {
+			return nil, &RPCError{Code: -32000, Message: "empty SSE stream"}
+		}
+		debug.Logf("  event: %s", debug.Truncate(first, 2000))
 		return parseResponse([]byte(first))
 	}
 
@@ -86,6 +94,7 @@ func (t *HTTPTransport) Call(method string, params json.RawMessage) (json.RawMes
 	if err != nil {
 		return nil, err
 	}
+	debug.Logf("  response: %s", debug.Truncate(string(respBody), 4000))
 	if strings.Contains(ct, "application/json") {
 		return parseResponse(respBody)
 	}
@@ -111,6 +120,7 @@ func (t *HTTPTransport) Stream() <-chan json.RawMessage {
 			if !ok {
 				return
 			}
+			debug.Logf("  event: %s", debug.Truncate(data, 2000))
 			ch <- json.RawMessage(data)
 		}
 	}()

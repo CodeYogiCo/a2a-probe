@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"strings"
 
 	"github.com/codeyogico/a2a-probe/internal/client"
 	"github.com/codeyogico/a2a-probe/internal/config"
+	"github.com/codeyogico/a2a-probe/internal/debug"
 	"github.com/codeyogico/a2a-probe/internal/model"
 	"github.com/google/uuid"
 )
@@ -31,7 +33,17 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/stream", s.stream)
 	mux.HandleFunc("/api/task", s.getTask)
 	mux.HandleFunc("/api/cancel", s.cancel)
-	return mux
+	return debugLog(mux)
+}
+
+// debugLog traces every incoming request when debug logging is enabled.
+func debugLog(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if debug.Enabled() && strings.HasPrefix(r.URL.Path, "/api/") {
+			debug.Logf("web %s %s?%s", r.Method, r.URL.Path, r.URL.RawQuery)
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // apiReq is the common JSON body for API requests.

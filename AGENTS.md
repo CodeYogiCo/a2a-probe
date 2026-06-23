@@ -64,7 +64,8 @@ Always run `go build ./...`, `go vet ./...`, and `go test ./...` before proposin
 - **`message/send` returns a Message OR a Task.** Agents that answer with a Task carry the real content in `artifacts`. `SendMessage` discriminates on `kind` (with a structural fallback) and returns a `SendResult` with exactly one of `Message`/`Task` set. Render Tasks via `ui.PrintTask`, not `PrintMessage`, or output comes out blank.
 - **The web UI is embedded at build time** (`go:embed web`). Editing `web/index.html` has no effect until you rebuild. When mutating DOM, don't overwrite a parent's `innerHTML` and then reference a child you just destroyed.
 - **`stdio` command vs `stdio` transport** are different: the `-t stdio` transport works; the top-level `stdio` *command* is currently a placeholder that echoes input.
-- **`--debug` / `--quiet`** flags are accepted but not yet wired into logging.
+- **`--debug`** is wired: it calls `debug.Enable()` in the root `PersistentPreRun`, and the transport/client/server layers call `debug.Logf` to trace the wire. Logs go to **stderr** so stdout stays pipeable; the spinner becomes a no-op under debug. **`--quiet`** is still unwired.
+- **Stream events may be wrapped** in a JSON-RPC `result` envelope, and a "stream" may be a single final `Task`. `coerceStreamEvent` unwraps `result` and detects `Task` snapshots; `printEvent`/`handleEvent` must handle `ev.Task`. Don't consume/discard the first SSE event in the transport — emit them all.
 
 ## Release process
 
