@@ -23,7 +23,7 @@ import (
 //go:embed web
 var webFS embed.FS
 
-const version = "0.2.6"
+const version = "0.2.7"
 
 var (
 	flagServer    string
@@ -106,7 +106,7 @@ func newSendCmd() *cobra.Command {
 			}
 
 			if stream {
-				sp := ui.StartSpinner("waiting for agent…")
+				sp := ui.StartSpinner()
 				ch, err := c.StreamMessage(msg)
 				if err != nil {
 					ch, err = c.SendSubscribe(params)
@@ -123,7 +123,7 @@ func newSendCmd() *cobra.Command {
 				return nil
 			}
 
-			sp := ui.StartSpinner("waiting for agent…")
+			sp := ui.StartSpinner()
 			resp, err := c.SendMessage(msg)
 			if err == nil {
 				sp.Stop()

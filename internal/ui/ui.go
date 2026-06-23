@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 	"strings"
 	"time"
@@ -11,6 +12,12 @@ import (
 	"github.com/codeyogico/a2a-probe/internal/debug"
 	"github.com/codeyogico/a2a-probe/internal/model"
 )
+
+// thinkWords are whimsical progress labels cycled by the spinner while waiting.
+var thinkWords = []string{"Thinking", "Pondering", "Noodling", "Percolating", "Flabbergasting",
+	"Ruminating", "Conjuring", "Brewing", "Marinating", "Cogitating", "Scheming", "Wrangling",
+	"Finessing", "Mulling", "Tinkering", "Vibing", "Manifesting", "Untangling", "Deliberating",
+	"Galaxy-braining", "Spelunking", "Whirring", "Incubating", "Synthesizing", "Riffing"}
 
 // ANSI color helpers
 const (
@@ -147,12 +154,12 @@ func PrintArtifactParts(parts []json.RawMessage) {
 			// Structured JSON payload — pretty-print the inner data object on
 			// its own line (a preceding text part may have left the cursor mid-line).
 			if d, ok := obj["data"]; ok {
-				fmt.Printf("\n%s\n", Dim(prettyJSON(d)))
+				fmt.Printf("\n%s\n", Green(prettyJSON(d)))
 			} else {
-				fmt.Printf("\n%s\n", Dim(prettyJSON(p)))
+				fmt.Printf("\n%s\n", Green(prettyJSON(p)))
 			}
 		default:
-			fmt.Printf("\n%s\n", Dim(prettyJSON(p)))
+			fmt.Printf("\n%s\n", Green(prettyJSON(p)))
 		}
 	}
 }
@@ -215,8 +222,9 @@ type Spinner struct {
 	done chan struct{}
 }
 
-// StartSpinner begins animating until Stop is called.
-func StartSpinner(label string) *Spinner {
+// StartSpinner begins animating until Stop is called. It cycles whimsical
+// "thinking" words while waiting.
+func StartSpinner() *Spinner {
 	s := &Spinner{stop: make(chan struct{}), done: make(chan struct{})}
 	// Skip the animation on a non-TTY, or when debug logging is on (its lines
 	// would clobber the spinner).
@@ -228,6 +236,7 @@ func StartSpinner(label string) *Spinner {
 		defer close(s.done)
 		frames := []rune("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
 		start := time.Now()
+		word := thinkWords[rand.Intn(len(thinkWords))]
 		ticker := time.NewTicker(100 * time.Millisecond)
 		defer ticker.Stop()
 		for i := 0; ; i++ {
@@ -236,9 +245,12 @@ func StartSpinner(label string) *Spinner {
 				fmt.Fprint(os.Stderr, "\r\033[K") // clear the line
 				return
 			case <-ticker.C:
+				if i > 0 && i%16 == 0 { // ~every 1.6s, pick a new word
+					word = thinkWords[rand.Intn(len(thinkWords))]
+				}
 				elapsed := time.Since(start).Round(time.Second)
-				fmt.Fprintf(os.Stderr, "\r%s %s %s",
-					Cyan(string(frames[i%len(frames)])), label, Dim("("+elapsed.String()+")"))
+				fmt.Fprintf(os.Stderr, "\r\033[K%s %s… %s",
+					Green(string(frames[i%len(frames)])), word, Dim("("+elapsed.String()+")"))
 			}
 		}
 	}()
