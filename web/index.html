@@ -430,7 +430,7 @@ async function doSend() {
     if ($('stream-chk').checked) await streamSend(text)
     else await plainSend(text)
   } catch(e) { errMsg(e.message) }
-  finally { $('send-btn').disabled = false; $('ti').focus() }
+  finally { stopThinking(); $('send-btn').disabled = false; $('ti').focus() }
 }
 
 async function plainSend(text) {
@@ -465,12 +465,14 @@ async function streamSend(text) {
       try { onStreamEvent(JSON.parse(raw)) } catch {}
     }
   }
+  stopThinking()
   if (streaming) { streaming.querySelector('.cursor')?.remove(); streaming.classList.remove('streaming'); streaming = null }
 }
 
 function onStreamEvent(ev) {
   if (ev.type === 'task') {
     // A full Task snapshot delivered mid-stream.
+    stopThinking()
     if (streaming) { streaming.querySelector('.cursor')?.remove(); streaming.classList.remove('streaming'); streaming = null }
     renderTask(ev.data)
   } else if (ev.type === 'status') {
@@ -485,20 +487,28 @@ function onStreamEvent(ev) {
     chip.textContent = state; chip.className = 'chip ' + state
     let span = body.querySelector('.stxt')
     if (!span) { span = document.createElement('span'); span.className = 'stxt'; span.style.marginLeft='8px'; body.appendChild(span) }
-    // Prefer the agent's own status text; otherwise show a friendly label.
-    span.textContent = txt || statusLabel(state)
+    if (txt) {
+      stopThinking(); span.textContent = txt
+    } else if (!s?.final) {
+      startThinking(span) // rotate whimsical "working" words
+    } else {
+      stopThinking(); span.textContent = ''
+    }
     if (s?.final) { body.querySelector('.cursor')?.remove(); streaming.classList.remove('streaming'); streaming = null }
   } else if (ev.type === 'artifact') {
     captureTaskId(ev.data?.id)
     const parts = ev.data?.artifact?.parts
     const txt = textFromParts(parts); if (!txt) return
+    stopThinking()
     if (!streaming) streaming = mkStreamMsg()
     const body = streaming.querySelector('.body')
+    const span = body.querySelector('.stxt'); if (span) span.textContent = ''
     let ct = body.querySelector('.ct')
     if (!ct) { ct = document.createElement('span'); ct.className = 'ct'; body.appendChild(ct) }
     ct.textContent += txt
     scroll()
   } else if (ev.type === 'message') {
+    stopThinking()
     if (streaming) { streaming.querySelector('.cursor')?.remove(); streaming.classList.remove('streaming'); streaming = null }
     renderMessage(ev.data)
   }
@@ -580,18 +590,19 @@ function captureTaskId(id) {
 function rmEmpty() { $('empty')?.remove() }
 function scroll() { const m=$('msgs'); m.scrollTop=m.scrollHeight }
 
-// statusLabel maps a task state to a friendly progress message.
-function statusLabel(state) {
-  return {
-    submitted: 'Processing your request…',
-    working: 'Processing search results…',
-    'input-required': 'Waiting for your input…',
-    completed: 'Done.',
-    failed: 'Failed.',
-    canceled: 'Canceled.',
-    cancelled: 'Canceled.',
-  }[state] || (state + '…')
+// ── whimsical "thinking" indicator (à la Claude) ─────────────────────────────
+const THINK_WORDS = ['Thinking','Pondering','Noodling','Percolating','Flabbergasting',
+  'Ruminating','Conjuring','Brewing','Marinating','Cogitating','Scheming','Wrangling',
+  'Finessing','Mulling','Tinkering','Vibing','Manifesting','Untangling','Deliberating',
+  'Galaxy-braining','Spelunking','Whirring','Incubating','Synthesizing','Riffing']
+let thinkTimer = null
+function startThinking(span) {
+  const tick = () => { span.textContent = THINK_WORDS[Math.floor(Math.random()*THINK_WORDS.length)] + '…' }
+  if (thinkTimer) return // already animating
+  tick()
+  thinkTimer = setInterval(tick, 1600)
 }
+function stopThinking() { if (thinkTimer) { clearInterval(thinkTimer); thinkTimer = null } }
 
 function textFromParts(parts) {
   if (!parts?.length) return ''
