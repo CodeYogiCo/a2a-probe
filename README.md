@@ -140,6 +140,59 @@ docker build -t a2a-probe .
 docker run --rm a2a-probe send "Hello"
 ```
 
+## Architecture
+
+`a2a-probe` is layered so the protocol logic is independent of how bytes move
+and how output is rendered.
+
+```
+                         ┌───────────────────────────────────────────────┐
+   you ──▶ CLI command   │                main.go (cobra)                 │
+                         │  send · get · cancel · watch · chat · stdio    │
+                         │                    · serve                     │
+                         └──────┬─────────────────────────────────┬──────-┘
+                                │                                 │
+                        CLI commands                         serve (web UI)
+                                │                                 │
+                                ▼                                 ▼
+                   internal/client.A2AClient          internal/server (HTTP)
+                   typed A2A operations:              embeds web/index.html
+                   SendMessage / StreamMessage        /api/{agent-card,send,
+                   GetTask / CancelTask / …           stream,task,cancel}
+                                │   ▲                             │
+                                │   │ result (Message│Task│stream)│
+                                ▼   │                             │
+                   internal/transport.Transport ◀────────────────┘
+                   http · sse · ws · stdio
+                   (JSON-RPC 2.0 envelope, SSE read incrementally)
+                                │   ▲
+                                ▼   │
+                         ╔══════════╧═══════╗
+                         ║   A2A agent      ║  (remote)
+                         ╚══════════════════╝
+
+   rendering ◀── internal/ui  (PrintTask / PrintMessage / stream status &
+                                artifacts, pretty-printed JSON, spinner)
+```
+
+**Request lifecycle (e.g. `send "hi"`):**
+
+1. **`main.go`** parses flags, resolves the server (URL or `~/.a2a/config.json`
+   alias via `internal/config`), and builds a client with the chosen transport.
+2. **`A2AClient`** turns the request into an A2A operation and calls the
+   transport. For `message/send` it discriminates the result into a **Message**
+   or a **Task** (`SendResult`); for streaming it returns a channel of events.
+3. **`Transport`** wraps the call in a JSON-RPC 2.0 envelope and sends it over
+   the wire. SSE responses are read line-by-line and surfaced incrementally.
+4. **`internal/ui`** renders the result — message text, task status + artifacts
+   (with pretty-printed JSON), or a live stream of status/artifact events. A
+   TTY spinner shows progress while waiting.
+
+The `serve` command reuses the same `A2AClient`/`Transport` stack behind a small
+HTTP API that drives the embedded single-page web UI.
+
+See [AGENTS.md](AGENTS.md) for a deeper development guide.
+
 ## A2A protocol support
 
 What the client implements today, mapped to the [A2A specification](https://a2a-protocol.org/latest/specification/).
