@@ -29,6 +29,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/", http.FileServer(http.FS(s.webFS)))
 	mux.HandleFunc("/api/agent-card", s.agentCard)
+	mux.HandleFunc("/api/discover", s.discover)
 	mux.HandleFunc("/api/send", s.send)
 	mux.HandleFunc("/api/stream", s.stream)
 	mux.HandleFunc("/api/task", s.getTask)
@@ -96,6 +97,26 @@ func (s *Server) agentCard(w http.ResponseWriter, r *http.Request) {
 	defer c.Close()
 	card := c.FetchAgentCard(url)
 	writeJSON(w, map[string]interface{}{"card": card})
+}
+
+// GET /api/discover?server=...  — fetch the raw agent card for inspection.
+func (s *Server) discover(w http.ResponseWriter, r *http.Request) {
+	server := r.URL.Query().Get("server")
+	if server == "" {
+		server = "http://localhost:8000"
+	}
+	c, url, err := s.buildClient(server, "http")
+	if err != nil {
+		writeErr(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	defer c.Close()
+	raw, foundURL, err := c.FetchAgentCardRaw(url)
+	if err != nil {
+		writeErr(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	writeJSON(w, map[string]interface{}{"raw": raw, "url": foundURL})
 }
 
 // POST /api/send

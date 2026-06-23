@@ -226,7 +226,7 @@ What the client implements today, mapped to the [A2A specification](https://a2a-
 
 - **Message/artifact parts:** `text`, `file` (bytes or URI), `data` (structured JSON, pretty-printed) — all rendered.
 - **Streaming events:** full `Task` snapshots, `TaskStatusUpdateEvent`, `TaskArtifactUpdateEvent`, and plain messages — including payloads wrapped in a JSON-RPC `result` envelope.
-- **Agent card discovery:** fetched from `/.well-known/agent.json`.
+- **Agent card discovery:** fetched from `/.well-known/agent.json`, falling back to `/.well-known/agent-card.json`. The `serve` web UI has a **Discover** page to inspect any agent's card (capabilities, skills, security, raw JSON).
 - **Multi-turn:** supported implicitly via the server's task/context continuation; no dedicated CLI affordance yet.
 
 ### Debugging
@@ -248,7 +248,6 @@ an on-page panel — no terminal needed.
 Not yet implemented, roughly in priority order:
 
 - **Push notifications** — register a webhook (`tasks/pushNotificationConfig/set`) plus a built-in receiver command to observe agent callbacks end-to-end.
-- **Agent-card path** — also probe the newer `/.well-known/agent-card.json` location (renamed in later spec revisions), with fallback.
 - **`--quiet`** — flag is accepted but does not yet suppress output. (`--debug` is implemented — see [Debugging](#debugging).)
 - **`stdio` command** — currently echoes input line-by-line as a placeholder; the full JSON-RPC 2.0 bridge is not implemented.
 - **`tasks/list`** and **authenticated extended card** retrieval.

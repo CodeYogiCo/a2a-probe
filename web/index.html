@@ -103,6 +103,27 @@ textarea#ti:focus{border-color:var(--accent)}
 code{background:var(--bg3);border:1px solid var(--border);padding:1px 4px;border-radius:3px;font-size:11px}
 ::-webkit-scrollbar{width:5px}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.tabs{display:flex;gap:4px}
+.tab{background:none;border:1px solid transparent;color:var(--dim);cursor:pointer;padding:3px 10px;border-radius:4px;font:inherit;font-size:12px}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--text);background:var(--bg3);border-color:var(--border)}
+.discover{flex:1;overflow-y:auto;padding:28px 24px;display:none}
+.disc-inner{max-width:820px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+.disc-inner h2{font-size:18px;font-weight:700}
+.muted{color:var(--dim);font-size:12px;line-height:1.6}
+.disc-row{display:flex;gap:8px}
+.disc-row input{flex:1;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:6px;font:inherit;font-size:13px;outline:none}
+.disc-row input:focus{border-color:var(--accent)}
+.disc-row .btn{width:auto;padding:8px 18px}
+.disc-card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:9px}
+.disc-card h3{font-size:15px;color:var(--green)}
+.disc-meta{display:flex;flex-wrap:wrap;gap:4px 16px;color:var(--dim);font-size:11px}
+.disc-sec{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin-top:4px}
+.skill{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:10px}
+.skill .sname{font-weight:600;color:var(--text)}
+.skill .sid{color:var(--dim);font-size:11px;font-weight:400}
+.disc-raw{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:11px;white-space:pre-wrap;word-break:break-all;color:var(--dim);max-height:340px;overflow:auto;margin-top:6px}
+details>summary{cursor:pointer;color:var(--dim);font-size:11px;user-select:none;padding:4px 0}
 .debug-panel{border-top:1px solid var(--border);background:var(--bg2);display:flex;flex-direction:column;max-height:38%}
 .debug-head{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 12px;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em}
 .debug-body{margin:0;padding:6px 12px;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;line-height:1.5;color:var(--dim);white-space:pre-wrap;word-break:break-all}
@@ -114,11 +135,27 @@ code{background:var(--bg3);border:1px solid var(--border);padding:1px 4px;border
 <div class="sb">
   <div class="left">
     <span class="logo">a2a-probe</span>
+    <nav class="tabs">
+      <button class="tab active" id="tab-discover">Discover</button>
+      <button class="tab" id="tab-chat">Chat</button>
+    </nav>
     <span id="conn-label"><span class="dot" id="dot"></span>&nbsp;disconnected</span>
   </div>
   <div class="right">
     <button class="btn-sm" id="debug-btn">&#9881; debug</button>
     <button class="btn-sm" id="theme-btn">&#9788; light</button>
+  </div>
+</div>
+
+<div class="discover" id="discover-view">
+  <div class="disc-inner">
+    <h2>Agent discovery</h2>
+    <p class="muted">Enter an A2A agent's base URL to fetch and inspect its agent card — capabilities, skills, security and the raw document.</p>
+    <div class="disc-row">
+      <input id="disc-url" type="text" placeholder="https://agent.example.com" />
+      <button class="btn primary" id="disc-btn">Discover</button>
+    </div>
+    <div id="disc-result"></div>
   </div>
 </div>
 
@@ -270,6 +307,84 @@ function renderCard(card) {
   sysMsg('Agent: ' + (card.name || '(unnamed)') + (card.version ? ' v' + card.version : ''))
 }
 
+// ── view tabs ───────────────────────────────────────────────────────────────
+$('tab-discover').addEventListener('click', () => showView('discover'))
+$('tab-chat').addEventListener('click', () => showView('chat'))
+function showView(v) {
+  $('discover-view').style.display = v === 'discover' ? 'block' : 'none'
+  document.querySelector('.layout').style.display = v === 'chat' ? 'flex' : 'none'
+  $('tab-discover').classList.toggle('active', v === 'discover')
+  $('tab-chat').classList.toggle('active', v === 'chat')
+}
+
+// ── discovery ───────────────────────────────────────────────────────────────
+$('disc-btn').addEventListener('click', doDiscover)
+$('disc-url').addEventListener('keydown', e => { if (e.key === 'Enter') doDiscover() })
+
+async function doDiscover() {
+  const url = $('disc-url').value.trim(); if (!url) return
+  const res = $('disc-result'); res.innerHTML = '<p class="muted">Discovering…</p>'
+  try {
+    const r = await fetch('/api/discover?' + new URLSearchParams({server: url}))
+    const d = await r.json()
+    if (d.error) throw new Error(d.error)
+    renderDiscovery(d.raw, d.url, url)
+  } catch(e) {
+    res.innerHTML = '<p class="muted" style="color:var(--red)">Discovery failed: ' + esc(e.message) + '</p>'
+  }
+}
+
+function renderDiscovery(card, foundUrl, baseUrl) {
+  card = card || {}
+  const caps = card.capabilities || {}
+  const capBadges = []
+  if (caps.streaming) capBadges.push('streaming')
+  if (caps.pushNotifications) capBadges.push('push notifications')
+  if (caps.stateTransitionHistory) capBadges.push('state history')
+  const meta = []
+  if (card.version) meta.push('v' + card.version)
+  if (card.url) meta.push(card.url)
+  if (card.provider?.organization) meta.push(card.provider.organization)
+  const modesIn = card.defaultInputModes || card.default_input_modes || []
+  const modesOut = card.defaultOutputModes || card.default_output_modes || []
+  const sec = Object.keys(card.securitySchemes || card.security_schemes || {})
+  const skills = card.skills || []
+
+  let h = '<div class="disc-card">'
+  h += '<h3>' + esc(card.name || '(unnamed agent)') + '</h3>'
+  if (meta.length) h += '<div class="disc-meta">' + meta.map(m => '<span>' + esc(m) + '</span>').join('') + '</div>'
+  if (card.description) h += '<div>' + esc(card.description) + '</div>'
+  if (capBadges.length) h += '<div>' + capBadges.map(c => '<span class="tag" style="color:var(--cyan)">' + esc(c) + '</span>').join('') + '</div>'
+  if (modesIn.length || modesOut.length) {
+    h += '<div class="disc-sec">i/o modes</div><div class="muted">in: ' + esc(modesIn.join(', ') || '—') + ' · out: ' + esc(modesOut.join(', ') || '—') + '</div>'
+  }
+  if (sec.length) h += '<div class="disc-sec">security</div><div>' + sec.map(s => '<span class="tag">' + esc(s) + '</span>').join('') + '</div>'
+  if (card.documentationUrl) h += '<div class="muted">docs: ' + esc(card.documentationUrl) + '</div>'
+  h += '<div class="muted">card: ' + esc(foundUrl) + '</div>'
+  h += '<button class="btn primary" id="disc-use" style="width:auto;align-self:flex-start;padding:6px 16px">Open in chat →</button>'
+  h += '</div>'
+
+  if (skills.length) {
+    h += '<div class="disc-sec">skills (' + skills.length + ')</div>'
+    for (const s of skills) {
+      h += '<div class="skill"><div class="sname">' + esc(s.name || s.id || '') + ' <span class="sid">' + esc(s.id || '') + '</span></div>'
+      if (s.description) h += '<div class="muted" style="margin-top:4px">' + esc(s.description) + '</div>'
+      if (s.tags?.length) h += '<div style="margin-top:4px">' + s.tags.map(t => '<span class="tag">' + esc(t) + '</span>').join('') + '</div>'
+      if (s.examples?.length) h += '<div class="muted" style="margin-top:4px">e.g. ' + esc(s.examples.join(' · ')) + '</div>'
+      h += '</div>'
+    }
+  }
+
+  h += '<details><summary>raw agent card</summary><pre class="disc-raw">' + esc(JSON.stringify(card, null, 2)) + '</pre></details>'
+  $('disc-result').innerHTML = h
+  $('disc-use').addEventListener('click', () => {
+    $('srv').value = baseUrl
+    localStorage.setItem('a2a.server', baseUrl)
+    showView('chat')
+    connect()
+  })
+}
+
 // ── debug panel ─────────────────────────────────────────────────────────────
 let debugES = null
 $('debug-btn').addEventListener('click', () => setDebug(!debugES))
@@ -370,7 +485,8 @@ function onStreamEvent(ev) {
     chip.textContent = state; chip.className = 'chip ' + state
     let span = body.querySelector('.stxt')
     if (!span) { span = document.createElement('span'); span.className = 'stxt'; span.style.marginLeft='8px'; body.appendChild(span) }
-    if (txt) span.textContent = txt
+    // Prefer the agent's own status text; otherwise show a friendly label.
+    span.textContent = txt || statusLabel(state)
     if (s?.final) { body.querySelector('.cursor')?.remove(); streaming.classList.remove('streaming'); streaming = null }
   } else if (ev.type === 'artifact') {
     captureTaskId(ev.data?.id)
@@ -464,14 +580,30 @@ function captureTaskId(id) {
 function rmEmpty() { $('empty')?.remove() }
 function scroll() { const m=$('msgs'); m.scrollTop=m.scrollHeight }
 
+// statusLabel maps a task state to a friendly progress message.
+function statusLabel(state) {
+  return {
+    submitted: 'Processing your request…',
+    working: 'Processing search results…',
+    'input-required': 'Waiting for your input…',
+    completed: 'Done.',
+    failed: 'Failed.',
+    canceled: 'Canceled.',
+    cancelled: 'Canceled.',
+  }[state] || (state + '…')
+}
+
 function textFromParts(parts) {
   if (!parts?.length) return ''
   return parts.map(p => {
     if (typeof p !== 'object' || !p) return String(p)
     const k = p.kind || p.type
     if (k === 'text') return p.text || ''
-    return JSON.stringify(p)
-  }).join('')
+    if (k === 'file') { const f = p.file || {}; return '[file: ' + (f.name || f.uri || 'unknown') + ']' }
+    // Structured data (and anything unrecognised) — pretty-print it.
+    if (k === 'data') return JSON.stringify(p.data ?? p, null, 2)
+    return JSON.stringify(p, null, 2)
+  }).join('\n')
 }
 
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') }
@@ -483,8 +615,9 @@ function uuid() {
 }
 
 // ── restore ───────────────────────────────────────────────────────────────────
-const ss = localStorage.getItem('a2a.server'); if(ss) $('srv').value = ss
+const ss = localStorage.getItem('a2a.server'); if(ss) { $('srv').value = ss; $('disc-url').value = ss }
 const st = localStorage.getItem('a2a.transport'); if(st) $('tsp').value = st
+showView('discover') // discovery is the home page
 </script>
 </body>
 </html>
