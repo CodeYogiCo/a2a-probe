@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codeyogico/a2a-probe/internal/debug"
 	"github.com/codeyogico/a2a-probe/internal/model"
 	"github.com/codeyogico/a2a-probe/internal/transport"
 )
@@ -146,20 +147,54 @@ func (c *A2AClient) Resubscribe(params model.TaskQueryParams) (<-chan StreamEven
 }
 
 // FetchAgentCard retrieves /.well-known/agent.json from the base URL.
-func (c *A2AClient) FetchAgentCard(baseURL string) *model.AgentCard {
-	url := strings.TrimRight(baseURL, "/") + "/.well-known/agent.json"
+// agentCardPaths are the well-known locations to probe, in order. The original
+// path and the newer spec name are both tried for compatibility.
+var agentCardPaths = []string{"/.well-known/agent.json", "/.well-known/agent-card.json"}
+
+// FetchAgentCardRaw fetches the raw agent card JSON, trying each well-known
+// path. It returns the bytes and the URL it was found at.
+func (c *A2AClient) FetchAgentCardRaw(baseURL string) (json.RawMessage, string, error) {
+	base := strings.TrimRight(baseURL, "/")
 	httpClient := &http.Client{Timeout: 10 * time.Second}
-	resp, err := httpClient.Get(url)
-	if err != nil {
-		return nil
+	var lastErr error
+	for _, p := range agentCardPaths {
+		url := base + p
+		debug.Logf("→ GET agent card %s", url)
+		resp, err := httpClient.Get(url)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		debug.Logf("← agent card %s: HTTP %d (%d bytes)", url, resp.StatusCode, len(body))
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		if resp.StatusCode != http.StatusOK {
+			lastErr = fmt.Errorf("HTTP %d from %s", resp.StatusCode, url)
+			continue
+		}
+		if !json.Valid(body) {
+			lastErr = fmt.Errorf("invalid JSON from %s", url)
+			continue
+		}
+		return json.RawMessage(body), url, nil
 	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
+	if lastErr == nil {
+		lastErr = fmt.Errorf("no agent card found at %s", base)
+	}
+	return nil, "", lastErr
+}
+
+func (c *A2AClient) FetchAgentCard(baseURL string) *model.AgentCard {
+	raw, _, err := c.FetchAgentCardRaw(baseURL)
 	if err != nil {
 		return nil
 	}
 	var card model.AgentCard
-	if err := json.Unmarshal(body, &card); err != nil {
+	if json.Unmarshal(raw, &card) != nil {
 		return nil
 	}
 	return &card
