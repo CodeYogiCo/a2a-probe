@@ -1,9 +1,37 @@
 package transport
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
+	"strings"
 )
+
+// newSSEScanner returns a line scanner over an SSE body with a buffer large
+// enough for big JSON event payloads (default bufio cap is only 64 KiB).
+func newSSEScanner(r io.Reader) *bufio.Scanner {
+	sc := bufio.NewScanner(r)
+	sc.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
+	return sc
+}
+
+// nextSSEData advances the scanner to the next non-empty `data:` payload,
+// returning it and true, or ("", false) when the stream ends.
+func nextSSEData(sc *bufio.Scanner) (string, bool) {
+	for sc.Scan() {
+		line := sc.Text()
+		if !strings.HasPrefix(line, "data:") {
+			continue
+		}
+		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if data == "" || data == "[DONE]" {
+			continue
+		}
+		return data, true
+	}
+	return "", false
+}
 
 // Transport is the interface all A2A transports implement.
 type Transport interface {

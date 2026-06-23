@@ -2,9 +2,12 @@ package transport
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestHTTPTransportCall_JSONResponse(t *testing.T) {
@@ -95,5 +98,48 @@ func TestHTTPTransportClose(t *testing.T) {
 	tr := NewHTTP("http://localhost:9999")
 	if err := tr.Close(); err != nil {
 		t.Errorf("Close() should not error: %v", err)
+	}
+}
+
+// TestHTTPTransportStreamIncremental proves the stream is read as events
+// arrive, not buffered until the server closes. The server holds the
+// connection open after the first event; the client must still receive it.
+func TestHTTPTransportStreamIncremental(t *testing.T) {
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fl, ok := w.(http.Flusher)
+		if !ok {
+			t.Error("ResponseWriter is not a Flusher")
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		io.WriteString(w, "data: {\"jsonrpc\":\"2.0\",\"id\":\"1\",\"result\":{}}\n\n")
+		fl.Flush()
+		io.WriteString(w, "data: {\"id\":\"t1\",\"status\":{\"state\":\"working\"},\"final\":false}\n\n")
+		fl.Flush()
+		<-release // hold the connection open
+		io.WriteString(w, "data: {\"id\":\"t1\",\"status\":{\"state\":\"completed\"},\"final\":true}\n\n")
+		fl.Flush()
+	}))
+	defer srv.Close()
+	defer close(release)
+
+	tr := NewHTTP(srv.URL)
+	if _, err := tr.Call("message/stream", json.RawMessage(`{}`)); err != nil {
+		t.Fatalf("Call failed: %v", err)
+	}
+	ch := tr.Stream()
+
+	// The first event must arrive while the server is still holding the
+	// connection (before we release it). With buffered ReadAll, Call itself
+	// would block here forever.
+	select {
+	case ev := <-ch:
+		if !strings.Contains(string(ev), "working") {
+			t.Errorf("first event: want 'working', got %s", ev)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("first event did not arrive incrementally")
 	}
 }
