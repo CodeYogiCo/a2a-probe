@@ -221,3 +221,36 @@ func TestCoerceStreamEventInvalidJSON(t *testing.T) {
 		t.Fatal("expected Raw for invalid JSON")
 	}
 }
+
+func TestCoerceStreamEventUnwrapsResultEnvelope(t *testing.T) {
+	// Many agents wrap each SSE payload in a JSON-RPC envelope.
+	raw := json.RawMessage(`{"jsonrpc":"2.0","id":"1","result":{"id":"t1","status":{"state":"working"},"final":false}}`)
+	ev := coerceStreamEvent(raw)
+	if ev.Status == nil {
+		t.Fatalf("expected Status after unwrapping result envelope, got %+v", ev)
+	}
+	if ev.Status.Status.State != model.TaskStateWorking {
+		t.Errorf("state: want working, got %s", ev.Status.Status.State)
+	}
+}
+
+func TestCoerceStreamEventTaskSnapshot(t *testing.T) {
+	// A full Task delivered as a stream event (kind=task / has artifacts).
+	raw := json.RawMessage(`{"kind":"task","id":"t1","status":{"state":"completed"},"artifacts":[{"index":0,"parts":[{"kind":"text","text":"done"}]}]}`)
+	ev := coerceStreamEvent(raw)
+	if ev.Task == nil {
+		t.Fatalf("expected Task event, got %+v", ev)
+	}
+	if len(ev.Task.Artifacts) != 1 {
+		t.Errorf("artifacts: want 1, got %d", len(ev.Task.Artifacts))
+	}
+}
+
+func TestCoerceStreamEventTaskInResultEnvelope(t *testing.T) {
+	// The regression: a Task wrapped in a result envelope (what returned nothing).
+	raw := json.RawMessage(`{"jsonrpc":"2.0","id":"1","result":{"kind":"task","id":"t1","status":{"state":"completed"},"artifacts":[{"index":0,"parts":[{"kind":"text","text":"red dress"}]}]}}`)
+	ev := coerceStreamEvent(raw)
+	if ev.Task == nil {
+		t.Fatalf("expected Task after unwrapping result envelope, got %+v", ev)
+	}
+}

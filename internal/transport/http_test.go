@@ -63,20 +63,19 @@ func TestHTTPTransportCall_SSEResponse(t *testing.T) {
 	defer srv.Close()
 
 	tr := NewHTTP(srv.URL)
-	result, err := tr.Call("tasks/sendSubscribe", json.RawMessage(`{}`))
+	_, err := tr.Call("tasks/sendSubscribe", json.RawMessage(`{}`))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// First result should be {} (from the first data line)
-	_ = result
 
-	// Drain the stream
+	// Every SSE data line is delivered through Stream (no event is consumed by
+	// Call), so all three events are emitted.
 	var events []json.RawMessage
 	for raw := range tr.Stream() {
 		events = append(events, raw)
 	}
-	if len(events) != 2 {
-		t.Errorf("stream events: want 2, got %d", len(events))
+	if len(events) != 3 {
+		t.Errorf("stream events: want 3, got %d", len(events))
 	}
 }
 
@@ -131,15 +130,21 @@ func TestHTTPTransportStreamIncremental(t *testing.T) {
 	}
 	ch := tr.Stream()
 
-	// The first event must arrive while the server is still holding the
-	// connection (before we release it). With buffered ReadAll, Call itself
-	// would block here forever.
-	select {
-	case ev := <-ch:
-		if !strings.Contains(string(ev), "working") {
-			t.Errorf("first event: want 'working', got %s", ev)
+	// The 'working' event must arrive while the server is still holding the
+	// connection open (before we release it). With buffered ReadAll, Call
+	// itself would block forever.
+	deadline := time.After(3 * time.Second)
+	for {
+		select {
+		case ev, ok := <-ch:
+			if !ok {
+				t.Fatal("stream closed before 'working' event arrived")
+			}
+			if strings.Contains(string(ev), "working") {
+				return // success: received incrementally
+			}
+		case <-deadline:
+			t.Fatal("'working' event did not arrive incrementally")
 		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("first event did not arrive incrementally")
 	}
 }

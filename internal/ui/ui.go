@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codeyogico/a2a-probe/internal/debug"
 	"github.com/codeyogico/a2a-probe/internal/model"
 )
 
@@ -217,7 +218,9 @@ type Spinner struct {
 // StartSpinner begins animating until Stop is called.
 func StartSpinner(label string) *Spinner {
 	s := &Spinner{stop: make(chan struct{}), done: make(chan struct{})}
-	if !stdoutIsTTY() {
+	// Skip the animation on a non-TTY, or when debug logging is on (its lines
+	// would clobber the spinner).
+	if !stdoutIsTTY() || debug.Enabled() {
 		close(s.done)
 		return s
 	}

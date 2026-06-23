@@ -224,10 +224,22 @@ What the client implements today, mapped to the [A2A specification](https://a2a-
 
 ### Content & discovery
 
-- **Message/artifact parts:** `text`, `file` (bytes or URI), `data` (structured JSON) — all rendered.
-- **Streaming events:** `TaskStatusUpdateEvent`, `TaskArtifactUpdateEvent`.
+- **Message/artifact parts:** `text`, `file` (bytes or URI), `data` (structured JSON, pretty-printed) — all rendered.
+- **Streaming events:** full `Task` snapshots, `TaskStatusUpdateEvent`, `TaskArtifactUpdateEvent`, and plain messages — including payloads wrapped in a JSON-RPC `result` envelope.
 - **Agent card discovery:** fetched from `/.well-known/agent.json`.
 - **Multi-turn:** supported implicitly via the server's task/context continuation; no dedicated CLI affordance yet.
+
+### Debugging
+
+Pass `--debug` on any command to trace the full request/response flow on stderr —
+the JSON-RPC envelope sent, response status and content type, and every SSE event
+as it arrives (with timestamps). stdout stays clean, so you can still pipe results:
+
+```bash
+a2a-probe --debug send --stream "hello" 2>debug.log
+```
+
+Debug tracing also covers the `serve` web UI's `/api/*` calls.
 
 ## Roadmap / planned
 
@@ -235,7 +247,7 @@ Not yet implemented, roughly in priority order:
 
 - **Push notifications** — register a webhook (`tasks/pushNotificationConfig/set`) plus a built-in receiver command to observe agent callbacks end-to-end.
 - **Agent-card path** — also probe the newer `/.well-known/agent-card.json` location (renamed in later spec revisions), with fallback.
-- **`--debug` / `--quiet`** — flags are accepted but do not yet change logging behaviour.
+- **`--quiet`** — flag is accepted but does not yet suppress output. (`--debug` is implemented — see [Debugging](#debugging).)
 - **`stdio` command** — currently echoes input line-by-line as a placeholder; the full JSON-RPC 2.0 bridge is not implemented.
 - **`tasks/list`** and **authenticated extended card** retrieval.
 - **gRPC / REST** transport bindings.

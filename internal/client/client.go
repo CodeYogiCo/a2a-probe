@@ -14,6 +14,7 @@ import (
 
 // StreamEvent is a discriminated union of streaming response types.
 type StreamEvent struct {
+	Task     *model.Task
 	Status   *model.TaskStatusUpdateEvent
 	Artifact *model.TaskArtifactUpdateEvent
 	Message  *model.Message
@@ -195,6 +196,25 @@ func coerceStreamEvent(raw json.RawMessage) StreamEvent {
 		}
 	}
 
+	// Unwrap a JSON-RPC envelope: {"jsonrpc":"2.0","id":…,"result":{…}}.
+	// SSE events from many agents wrap the real payload under "result".
+	if resultRaw, ok := obj["result"]; ok {
+		var inner map[string]json.RawMessage
+		if json.Unmarshal(resultRaw, &inner) == nil && len(inner) > 0 {
+			obj = inner
+			raw = resultRaw
+		}
+	}
+
+	// A full Task snapshot (kind="task" or carries artifacts) — render in full.
+	// Checked before status, since a Task also has a status field.
+	if isTaskEvent(obj) {
+		var t model.Task
+		if json.Unmarshal(raw, &t) == nil {
+			return StreamEvent{Task: &t}
+		}
+	}
+
 	if _, hasStatus := obj["status"]; hasStatus {
 		var ev model.TaskStatusUpdateEvent
 		if json.Unmarshal(raw, &ev) == nil {
@@ -229,6 +249,20 @@ func coerceStreamEvent(raw json.RawMessage) StreamEvent {
 	}
 
 	return StreamEvent{Raw: raw}
+}
+
+// isTaskEvent reports whether a decoded event object is a full Task snapshot
+// rather than an incremental status/artifact update.
+func isTaskEvent(obj map[string]json.RawMessage) bool {
+	if kindRaw, ok := obj["kind"]; ok {
+		var kind string
+		if json.Unmarshal(kindRaw, &kind) == nil && kind == "task" {
+			return true
+		}
+	}
+	// A plural "artifacts" array is a Task; the singular "artifact" is an update.
+	_, hasArtifacts := obj["artifacts"]
+	return hasArtifacts
 }
 
 // BuildClient creates an A2AClient from the global CLI options.
