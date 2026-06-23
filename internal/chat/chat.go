@@ -85,7 +85,7 @@ func (h *Handler) handleSend(text string, card *model.AgentCard) {
 	canStream := card != nil && card.Capabilities != nil &&
 		card.Capabilities.Streaming != nil && *card.Capabilities.Streaming
 
-	sp := ui.StartSpinner("waiting for agent…")
+	sp := ui.StartSpinner()
 
 	if canStream {
 		ch, err := h.c.StreamMessage(msg)
