@@ -85,11 +85,14 @@ func (h *Handler) handleSend(text string, card *model.AgentCard) {
 	canStream := card != nil && card.Capabilities != nil &&
 		card.Capabilities.Streaming != nil && *card.Capabilities.Streaming
 
+	sp := ui.StartSpinner("waiting for agent…")
+
 	if canStream {
 		ch, err := h.c.StreamMessage(msg)
 		if err != nil {
 			ch, err = h.c.SendSubscribe(params)
 		}
+		sp.Stop()
 		if err != nil {
 			ui.PrintError(err.Error())
 			return
@@ -103,6 +106,7 @@ func (h *Handler) handleSend(text string, card *model.AgentCard) {
 	resp, err := h.c.SendMessage(msg)
 	if err != nil {
 		task, err2 := h.c.SendTask(params)
+		sp.Stop()
 		if err2 != nil {
 			ui.PrintError(err2.Error())
 			return
@@ -110,6 +114,7 @@ func (h *Handler) handleSend(text string, card *model.AgentCard) {
 		ui.PrintTask(task)
 		return
 	}
+	sp.Stop()
 	if resp.Task != nil {
 		ui.PrintTask(resp.Task)
 	} else {

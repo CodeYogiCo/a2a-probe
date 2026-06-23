@@ -1,9 +1,12 @@
 package ui
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/codeyogico/a2a-probe/internal/model"
 )
@@ -140,11 +143,27 @@ func PrintArtifactParts(parts []json.RawMessage) {
 				fmt.Println(Cyan("[file: " + label + "]"))
 			}
 		case "data":
-			fmt.Println(Dim(string(p)))
+			// Structured JSON payload — pretty-print the inner data object on
+			// its own line (a preceding text part may have left the cursor mid-line).
+			if d, ok := obj["data"]; ok {
+				fmt.Printf("\n%s\n", Dim(prettyJSON(d)))
+			} else {
+				fmt.Printf("\n%s\n", Dim(prettyJSON(p)))
+			}
 		default:
-			fmt.Println(Dim(string(p)))
+			fmt.Printf("\n%s\n", Dim(prettyJSON(p)))
 		}
 	}
+}
+
+// prettyJSON indents a raw JSON value for human reading, falling back to the
+// original bytes if it cannot be parsed.
+func prettyJSON(raw json.RawMessage) string {
+	var buf bytes.Buffer
+	if err := json.Indent(&buf, raw, "  ", "  "); err != nil {
+		return string(raw)
+	}
+	return buf.String()
 }
 
 // ExtractText joins the text of all parts in a message.
@@ -187,3 +206,57 @@ func PrintInfo(msg string) { fmt.Println(Dim(msg)) }
 
 // PrintSuccess prints a success message in green.
 func PrintSuccess(msg string) { fmt.Println(Green(msg)) }
+
+// Spinner is an animated "working" indicator drawn on stderr while a request is
+// in flight. On a non-TTY (pipes, CI) it is a no-op so output stays clean.
+type Spinner struct {
+	stop chan struct{}
+	done chan struct{}
+}
+
+// StartSpinner begins animating until Stop is called.
+func StartSpinner(label string) *Spinner {
+	s := &Spinner{stop: make(chan struct{}), done: make(chan struct{})}
+	if !stdoutIsTTY() {
+		close(s.done)
+		return s
+	}
+	go func() {
+		defer close(s.done)
+		frames := []rune("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
+		start := time.Now()
+		ticker := time.NewTicker(100 * time.Millisecond)
+		defer ticker.Stop()
+		for i := 0; ; i++ {
+			select {
+			case <-s.stop:
+				fmt.Fprint(os.Stderr, "\r\033[K") // clear the line
+				return
+			case <-ticker.C:
+				elapsed := time.Since(start).Round(time.Second)
+				fmt.Fprintf(os.Stderr, "\r%s %s %s",
+					Cyan(string(frames[i%len(frames)])), label, Dim("("+elapsed.String()+")"))
+			}
+		}
+	}()
+	return s
+}
+
+// Stop halts the spinner and clears its line. Safe to call exactly once.
+func (s *Spinner) Stop() {
+	select {
+	case <-s.done: // non-TTY no-op, already finished
+		return
+	default:
+	}
+	close(s.stop)
+	<-s.done
+}
+
+func stdoutIsTTY() bool {
+	fi, err := os.Stdout.Stat()
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
+}

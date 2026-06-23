@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -14,10 +15,11 @@ import (
 
 // HTTPTransport sends JSON-RPC over HTTP (and handles SSE responses).
 type HTTPTransport struct {
-	endpoint       string
-	client         *http.Client
-	pendingSseLines []string
-	streamCh       chan json.RawMessage
+	endpoint string
+	client   *http.Client
+	// Set by a streaming Call; consumed incrementally by Stream.
+	streamBody    io.ReadCloser
+	streamScanner *bufio.Scanner
 }
 
 // NewHTTP creates an HTTPTransport targeting the given endpoint URL.
@@ -30,7 +32,6 @@ func NewHTTP(endpoint string) *HTTPTransport {
 				ResponseHeaderTimeout: 90 * time.Second,
 			},
 		},
-		streamCh: make(chan json.RawMessage, 256),
 	}
 }
 
@@ -60,62 +61,57 @@ func (t *HTTPTransport) Call(method string, params json.RawMessage) (json.RawMes
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
 
+	ct := resp.Header.Get("Content-Type")
+	if strings.Contains(ct, "text/event-stream") {
+		// Read the SSE stream incrementally. The first data payload is returned
+		// as the Call result; Stream() reads the rest as it arrives.
+		scanner := newSSEScanner(resp.Body)
+		first, ok := nextSSEData(scanner)
+		if !ok {
+			resp.Body.Close()
+			return nil, &RPCError{Code: -32000, Message: "empty SSE stream"}
+		}
+		if isStreaming {
+			t.streamBody = resp.Body
+			t.streamScanner = scanner
+		} else {
+			resp.Body.Close()
+		}
+		return parseResponse([]byte(first))
+	}
+
+	defer resp.Body.Close()
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
-
-	ct := resp.Header.Get("Content-Type")
-	switch {
-	case strings.Contains(ct, "application/json"):
+	if strings.Contains(ct, "application/json") {
 		return parseResponse(respBody)
-
-	case strings.Contains(ct, "text/event-stream"):
-		lines := strings.Split(string(respBody), "\n")
-		t.pendingSseLines = lines
-
-		// Find first data line and return its result
-		for _, line := range lines {
-			if !strings.HasPrefix(line, "data:") {
-				continue
-			}
-			data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
-			if data == "" || data == "[DONE]" {
-				continue
-			}
-			return parseResponse([]byte(data))
-		}
-		return nil, &RPCError{Code: -32000, Message: "empty SSE stream"}
-
-	default:
-		return nil, fmt.Errorf("unsupported Content-Type: %s", ct)
 	}
+	return nil, fmt.Errorf("unsupported Content-Type: %s", ct)
 }
 
 func (t *HTTPTransport) Stream() <-chan json.RawMessage {
+	scanner := t.streamScanner
+	body := t.streamBody
+	t.streamScanner, t.streamBody = nil, nil
+
 	ch := make(chan json.RawMessage, 256)
 	go func() {
 		defer close(ch)
-		lines := t.pendingSseLines
-		t.pendingSseLines = nil
-
-		skippedFirst := false
-		for _, line := range lines {
-			if !strings.HasPrefix(line, "data:") {
-				continue
+		if body != nil {
+			defer body.Close()
+		}
+		if scanner == nil {
+			return
+		}
+		for {
+			data, ok := nextSSEData(scanner)
+			if !ok {
+				return
 			}
-			if !skippedFirst {
-				skippedFirst = true
-				continue
-			}
-			text := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
-			if text == "" || text == "[DONE]" {
-				continue
-			}
-			var raw json.RawMessage = json.RawMessage(text)
-			ch <- raw
+			ch <- json.RawMessage(data)
 		}
 	}()
 	return ch
