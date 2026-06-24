@@ -230,6 +230,7 @@ What the client implements today, mapped to the [A2A specification](https://a2a-
 - **Streaming events:** full `Task` snapshots, `TaskStatusUpdateEvent`, `TaskArtifactUpdateEvent`, and plain messages — including payloads wrapped in a JSON-RPC `result` envelope.
 - **Agent card discovery:** fetched from `/.well-known/agent.json`, falling back to `/.well-known/agent-card.json`. The `serve` web UI has a **Discover** page to inspect any agent's card (capabilities, skills, security, raw JSON).
 - **Multi-turn:** supported implicitly via the server's task/context continuation; no dedicated CLI affordance yet.
+- **Security schemes:** the agent card's `securitySchemes` are read and displayed (Discover page), but **not exercised** — requests are sent unauthenticated.
 
 ### Debugging
 
@@ -245,17 +246,34 @@ Debug tracing also covers the `serve` web UI's `/api/*` calls. In the web UI,
 the **⚙ debug** toggle turns tracing on at runtime and streams the live log into
 an on-page panel — no terminal needed.
 
-## Roadmap / planned
+## Not yet implemented (A2A spec gaps)
 
-Not yet implemented, roughly in priority order:
+The client covers the core **synchronous + streaming JSON-RPC** flow (everything
+marked ✅ above). Relative to the
+[A2A specification](https://a2a-protocol.org/latest/specification/), these are
+**not yet implemented**:
 
-- **Push notifications** — register a webhook (`tasks/pushNotificationConfig/set`) plus a built-in receiver command to observe agent callbacks end-to-end.
-- **`--quiet`** — flag is accepted but does not yet suppress output. (`--debug` is implemented — see [Debugging](#debugging).)
-- **`stdio` command** — currently echoes input line-by-line as a placeholder; the full JSON-RPC 2.0 bridge is not implemented.
-- **`tasks/list`** and **authenticated extended card** retrieval.
-- **gRPC / REST** transport bindings.
+**Transports**
+- ❌ **gRPC** binding
+- ❌ **HTTP+JSON / REST** binding
+- ❌ **Multiple interfaces** — `additionalInterfaces` + `preferredTransport` (v1.0); an agent advertising several endpoints. The client uses the single agent-card `url` with the transport you pass via `-t`.
 
-Contributions welcome — see [AGENTS.md](AGENTS.md) for architecture and development guidance.
+**Methods**
+- ❌ **Push notifications** — `tasks/pushNotificationConfig/{set,get,list,delete}`, plus a webhook receiver to observe callbacks end-to-end.
+- ❌ **List tasks** — `tasks/list`.
+- ❌ **Authenticated extended agent card** — `agent/getAuthenticatedExtendedCard`.
+
+**Security**
+- ❌ **Auth flows** — the agent card's `securitySchemes` (OAuth2 / API key / bearer) are displayed but not exercised; requests go out unauthenticated.
+
+**Interaction**
+- ❌ **Multi-turn `input-required`** — works implicitly via context continuation, but there's no dedicated CLI affordance for the `input-required` state.
+
+**CLI ergonomics (not spec, still pending)**
+- ❌ **`stdio` command** — placeholder that echoes input; the full JSON-RPC 2.0 bridge is unbuilt. (The `-t stdio` *transport* does work.)
+- ❌ **`--quiet`** — accepted but does not suppress output yet. (`--debug` *is* implemented — see [Debugging](#debugging).)
+
+Everything else in the matrix above is implemented. Contributions welcome — see [AGENTS.md](AGENTS.md) for architecture and development guidance.
 
 ## License
 
