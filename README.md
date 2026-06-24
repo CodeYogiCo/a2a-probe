@@ -2,7 +2,7 @@
 
 A command-line client for the [A2A (Agent-to-Agent) Protocol](https://google.github.io/A2A/) v0.3.0, written in Go.
 
-> Ported from the original Kotlin/GraalVM implementation. The Go build produces a small, statically-linked binary with no runtime dependencies.
+> Compiles to a small, statically-linked binary with no runtime dependencies.
 
 ## Installation
 
