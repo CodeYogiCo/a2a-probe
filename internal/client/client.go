@@ -1,6 +1,7 @@
 package client
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -319,29 +320,78 @@ func isTaskEvent(obj map[string]json.RawMessage) bool {
 
 // BuildClient creates an A2AClient from the global CLI options.
 func BuildClient(server, transportName string) (*A2AClient, error) {
+	return BuildClientWithHeaders(server, transportName, nil)
+}
+
+// BuildClientWithHeaders is BuildClient with extra HTTP headers (auth, etc.)
+// applied to every request the transport makes.
+func BuildClientWithHeaders(server, transportName string, headers map[string]string) (*A2AClient, error) {
 	var t transport.Transport
 	switch transportName {
 	case "sse":
-		t = transport.NewSSE(server, "")
+		t = transport.NewSSE(server, "", headers)
 	case "ws":
-		t = transport.NewWebSocket(server)
+		t = transport.NewWebSocket(server, headers)
 	case "stdio":
 		t = transport.NewStdio()
 	default:
-		t = transport.NewHTTP(server)
+		t = transport.NewHTTP(server, headers)
 	}
 	return New(t), nil
 }
 
 // MakeTextMessage constructs a user Message with a single text part.
 func MakeTextMessage(text, messageID string) model.Message {
-	part, _ := json.Marshal(map[string]string{"kind": "text", "text": text})
+	return MakeMessage(messageID, []json.RawMessage{TextPart(text)}, nil)
+}
+
+// MakeMessage builds a user Message from pre-built parts and optional metadata.
+func MakeMessage(messageID string, parts []json.RawMessage, metadata json.RawMessage) model.Message {
 	return model.Message{
 		Kind:      "message",
 		Role:      model.RoleUser,
-		Parts:     []json.RawMessage{part},
+		Parts:     parts,
 		MessageID: messageID,
+		Metadata:  metadata,
 	}
+}
+
+// TextPart builds a text part.
+func TextPart(text string) json.RawMessage {
+	b, _ := json.Marshal(map[string]any{"kind": "text", "text": text})
+	return b
+}
+
+// DataPart builds a structured-data part from raw JSON.
+func DataPart(data json.RawMessage) json.RawMessage {
+	b, _ := json.Marshal(map[string]any{"kind": "data", "data": data})
+	return b
+}
+
+// FilePartURI builds a file part referencing a URI.
+func FilePartURI(uri, name, mimeType string) json.RawMessage {
+	file := map[string]any{"uri": uri}
+	if name != "" {
+		file["name"] = name
+	}
+	if mimeType != "" {
+		file["mimeType"] = mimeType
+	}
+	b, _ := json.Marshal(map[string]any{"kind": "file", "file": file})
+	return b
+}
+
+// FilePartBytes builds a file part with base64-encoded inline bytes.
+func FilePartBytes(data []byte, name, mimeType string) json.RawMessage {
+	file := map[string]any{"bytes": base64.StdEncoding.EncodeToString(data)}
+	if name != "" {
+		file["name"] = name
+	}
+	if mimeType != "" {
+		file["mimeType"] = mimeType
+	}
+	b, _ := json.Marshal(map[string]any{"kind": "file", "file": file})
+	return b
 }
 
 // PartText extracts plain text from a message part, returning "" for non-text parts.

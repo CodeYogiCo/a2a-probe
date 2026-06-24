@@ -75,6 +75,29 @@ func fakeA2AServer(t *testing.T) *httptest.Server {
 	}))
 }
 
+// echoServer captures the Authorization header and message parts of the first
+// message/send request, then returns a simple Task.
+func echoServer(t *testing.T, gotAuth *string, gotParts *string) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		*gotAuth = r.Header.Get("Authorization")
+		body, _ := io.ReadAll(r.Body)
+		var env struct {
+			ID     string `json:"id"`
+			Params struct {
+				Message struct {
+					Parts []json.RawMessage `json:"parts"`
+				} `json:"message"`
+			} `json:"params"`
+		}
+		json.Unmarshal(body, &env)
+		b, _ := json.Marshal(env.Params.Message.Parts)
+		*gotParts = string(b)
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"jsonrpc":"2.0","id":"`+env.ID+`","result":{"kind":"task","id":"t","status":{"state":"completed"}}}`)
+	}))
+}
+
 // run executes the built CLI and returns combined stdout+stderr.
 func run(t *testing.T, args ...string) string {
 	t.Helper()
@@ -115,5 +138,26 @@ func TestSendStreamOverSSE(t *testing.T) {
 	}
 	if !strings.Contains(out, "completed") {
 		t.Errorf("expected final 'completed' status in output, got:\n%s", out)
+	}
+}
+
+// TestSendDataAndAuthHeader verifies --data attaches a data part and --bearer
+// sets the Authorization header end-to-end through the real CLI.
+func TestSendDataAndAuthHeader(t *testing.T) {
+	var gotAuth, gotParts string
+	srv := echoServer(t, &gotAuth, &gotParts)
+	defer srv.Close()
+
+	run(t, "-s", srv.URL, "--bearer", "secret123",
+		"send", "find", "--data", `{"query":"red dress","size":"M"}`)
+
+	if gotAuth != "Bearer secret123" {
+		t.Errorf("Authorization header: want 'Bearer secret123', got %q", gotAuth)
+	}
+	if !strings.Contains(gotParts, `"kind":"data"`) || !strings.Contains(gotParts, "red dress") {
+		t.Errorf("expected a data part with the payload, got: %s", gotParts)
+	}
+	if !strings.Contains(gotParts, `"kind":"text"`) {
+		t.Errorf("expected the text part too, got: %s", gotParts)
 	}
 }

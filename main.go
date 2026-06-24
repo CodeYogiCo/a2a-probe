@@ -3,10 +3,14 @@ package main
 import (
 	"bufio"
 	"embed"
+	"encoding/json"
 	"fmt"
 	"io/fs"
+	"mime"
 	"net/http"
 	"os"
+	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/codeyogico/a2a-probe/internal/chat"
@@ -23,13 +27,16 @@ import (
 //go:embed web
 var webFS embed.FS
 
-const version = "0.2.11"
+const version = "0.3.0"
 
 var (
 	flagServer    string
 	flagTransport string
 	flagDebug     bool
 	flagQuiet     bool
+	flagHeaders   []string
+	flagBearer    string
+	flagAPIKey    string
 )
 
 func main() {
@@ -44,6 +51,10 @@ func main() {
 		"Transport: http | sse | ws | stdio")
 	root.PersistentFlags().BoolVar(&flagDebug, "debug", false, "Enable debug logging")
 	root.PersistentFlags().BoolVarP(&flagQuiet, "quiet", "q", false, "Suppress non-essential output")
+	root.PersistentFlags().StringArrayVarP(&flagHeaders, "header", "H", nil,
+		"Extra request header 'Key: Value' (repeatable)")
+	root.PersistentFlags().StringVar(&flagBearer, "bearer", "", "Bearer token (sets Authorization: Bearer …)")
+	root.PersistentFlags().StringVar(&flagAPIKey, "api-key", "", "API key (sets X-API-Key header)")
 
 	root.PersistentPreRun = func(cmd *cobra.Command, args []string) {
 		if flagDebug {
@@ -74,7 +85,33 @@ func buildClient() (*client.A2AClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	return client.BuildClient(url, flagTransport)
+	headers, err := authHeaders()
+	if err != nil {
+		return nil, err
+	}
+	return client.BuildClientWithHeaders(url, flagTransport, headers)
+}
+
+// authHeaders builds the request headers from --header/--bearer/--api-key.
+func authHeaders() (map[string]string, error) {
+	h := map[string]string{}
+	for _, raw := range flagHeaders {
+		k, v, ok := strings.Cut(raw, ":")
+		if !ok {
+			return nil, fmt.Errorf("invalid --header %q (want 'Key: Value')", raw)
+		}
+		h[strings.TrimSpace(k)] = strings.TrimSpace(v)
+	}
+	if flagBearer != "" {
+		h["Authorization"] = "Bearer " + flagBearer
+	}
+	if flagAPIKey != "" {
+		h["X-API-Key"] = flagAPIKey
+	}
+	if len(h) == 0 {
+		return nil, nil
+	}
+	return h, nil
 }
 
 func sessionID() string { return uuid.New().String() }
@@ -84,21 +121,36 @@ func sessionID() string { return uuid.New().String() }
 func newSendCmd() *cobra.Command {
 	var stream bool
 	var taskID string
+	var dataFlag, fileFlag, metaFlag string
 
 	cmd := &cobra.Command{
-		Use:   "send <message>",
-		Short: "Send a task to the agent and print the result",
-		Args:  cobra.ExactArgs(1),
+		Use:   "send [message]",
+		Short: "Send a message (text and/or structured data/file) to the agent",
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			text := args[0]
 			sid := sessionID()
+
+			parts, err := buildParts(args, dataFlag, fileFlag)
+			if err != nil {
+				return err
+			}
+			if len(parts) == 0 {
+				return fmt.Errorf("nothing to send: provide a message, --data, or --file")
+			}
+			var meta json.RawMessage
+			if metaFlag != "" {
+				if meta, err = readJSONArg(metaFlag); err != nil {
+					return fmt.Errorf("--metadata: %w", err)
+				}
+			}
+
 			c, err := buildClient()
 			if err != nil {
 				return err
 			}
 			defer c.Close()
 
-			msg := client.MakeTextMessage(text, uuid.New().String())
+			msg := client.MakeMessage(uuid.New().String(), parts, meta)
 			params := model.TaskSendParams{
 				ID:        taskID,
 				SessionID: strPtr(sid),
@@ -146,7 +198,61 @@ func newSendCmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&stream, "stream", false, "Use streaming (sendSubscribe)")
 	cmd.Flags().StringVar(&taskID, "id", uuid.New().String(), "Task ID")
+	cmd.Flags().StringVar(&dataFlag, "data", "", "Attach a structured JSON data part (inline JSON or @file.json)")
+	cmd.Flags().StringVar(&fileFlag, "file", "", "Attach a file part (local path or http(s) URI)")
+	cmd.Flags().StringVar(&metaFlag, "metadata", "", "Message metadata as JSON (inline or @file.json)")
 	return cmd
+}
+
+// buildParts assembles message parts from the text arg and --data/--file flags.
+func buildParts(args []string, dataFlag, fileFlag string) ([]json.RawMessage, error) {
+	var parts []json.RawMessage
+	if len(args) == 1 && args[0] != "" {
+		parts = append(parts, client.TextPart(args[0]))
+	}
+	if dataFlag != "" {
+		raw, err := readJSONArg(dataFlag)
+		if err != nil {
+			return nil, fmt.Errorf("--data: %w", err)
+		}
+		parts = append(parts, client.DataPart(raw))
+	}
+	if fileFlag != "" {
+		p, err := filePart(fileFlag)
+		if err != nil {
+			return nil, fmt.Errorf("--file: %w", err)
+		}
+		parts = append(parts, p)
+	}
+	return parts, nil
+}
+
+// readJSONArg reads a JSON value given inline or as @path, validating it.
+func readJSONArg(v string) (json.RawMessage, error) {
+	s := v
+	if strings.HasPrefix(v, "@") {
+		b, err := os.ReadFile(v[1:])
+		if err != nil {
+			return nil, err
+		}
+		s = string(b)
+	}
+	if !json.Valid([]byte(s)) {
+		return nil, fmt.Errorf("invalid JSON")
+	}
+	return json.RawMessage(s), nil
+}
+
+// filePart builds a file part from an http(s) URI or a local file path.
+func filePart(v string) (json.RawMessage, error) {
+	if strings.HasPrefix(v, "http://") || strings.HasPrefix(v, "https://") {
+		return client.FilePartURI(v, path.Base(v), ""), nil
+	}
+	b, err := os.ReadFile(v)
+	if err != nil {
+		return nil, err
+	}
+	return client.FilePartBytes(b, filepath.Base(v), mime.TypeByExtension(filepath.Ext(v))), nil
 }
 
 // ── get ───────────────────────────────────────────────────────────────────────
@@ -246,7 +352,7 @@ func newChatCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			c, err := client.BuildClient(url, flagTransport)
+			c, err := buildClient()
 			if err != nil {
 				return err
 			}

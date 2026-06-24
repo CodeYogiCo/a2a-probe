@@ -3,6 +3,7 @@ package transport
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -10,16 +11,18 @@ import (
 
 // WebSocketTransport implements JSON-RPC 2.0 over a WebSocket connection.
 type WebSocketTransport struct {
-	url  string
-	conn *websocket.Conn
-	ch   chan json.RawMessage
+	url     string
+	headers map[string]string
+	conn    *websocket.Conn
+	ch      chan json.RawMessage
 }
 
 // NewWebSocket creates a WebSocketTransport that connects to the given URL.
-func NewWebSocket(url string) *WebSocketTransport {
+func NewWebSocket(url string, headers map[string]string) *WebSocketTransport {
 	return &WebSocketTransport{
-		url: url,
-		ch:  make(chan json.RawMessage, 256),
+		url:     url,
+		headers: headers,
+		ch:      make(chan json.RawMessage, 256),
 	}
 }
 
@@ -27,7 +30,14 @@ func (t *WebSocketTransport) ensureConnected() error {
 	if t.conn != nil {
 		return nil
 	}
-	conn, _, err := websocket.DefaultDialer.Dial(t.url, nil)
+	var reqHeader http.Header
+	if len(t.headers) > 0 {
+		reqHeader = http.Header{}
+		for k, v := range t.headers {
+			reqHeader.Set(k, v)
+		}
+	}
+	conn, _, err := websocket.DefaultDialer.Dial(t.url, reqHeader)
 	if err != nil {
 		return fmt.Errorf("websocket dial %s: %w", t.url, err)
 	}
