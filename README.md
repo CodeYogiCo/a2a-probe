@@ -92,9 +92,17 @@ a2a-probe [OPTIONS] COMMAND
 Options:
   -s, --server TEXT     Server URL or config alias (default: http://localhost:8000)
   -t, --transport TEXT  Transport: http | sse | ws | stdio (default: http)
+  -H, --header 'K: V'   Extra request header (repeatable)
+      --bearer TOKEN    Bearer token (sets Authorization: Bearer …)
+      --api-key VALUE   API key (sets X-API-Key)
       --debug           Enable debug logging
   -q, --quiet           Suppress non-essential output
       --version         Print version and exit
+
+send options:
+      --data JSON       Attach a structured data part (inline JSON or @file.json)
+      --file PATH|URI   Attach a file part (local path or http(s) URI)
+      --metadata JSON   Message metadata (inline JSON or @file.json)
 ```
 
 ### Commands
@@ -124,6 +132,16 @@ a2a-probe send --stream "Write a haiku"
 
 # Use SSE transport against a named server
 a2a-probe -s myagent -t sse send "Hello"
+
+# Send a structured (custom) payload, with auth
+a2a-probe -s myagent --bearer "$TOKEN" \
+  send "search" --data '{"query":"red dress","filters":{"size":"M"}}'
+
+# Attach a file and read data/metadata from files
+a2a-probe send "analyse" --file ./report.pdf --metadata @meta.json
+
+# Arbitrary header / API key
+a2a-probe -H "X-Tenant: acme" --api-key "$KEY" send "ping"
 
 # Save a server alias
 a2a-probe config add myagent http://localhost:9000
@@ -226,11 +244,11 @@ What the client implements today, mapped to the [A2A specification](https://a2a-
 
 ### Content & discovery
 
-- **Message/artifact parts:** `text`, `file` (bytes or URI), `data` (structured JSON, pretty-printed) — all rendered.
+- **Message/artifact parts:** `text`, `file` (bytes or URI), `data` (structured JSON, pretty-printed) — all rendered **and sendable** (`--data` / `--file` / `--metadata`, or the web UI's data box).
 - **Streaming events:** full `Task` snapshots, `TaskStatusUpdateEvent`, `TaskArtifactUpdateEvent`, and plain messages — including payloads wrapped in a JSON-RPC `result` envelope.
 - **Agent card discovery:** fetched from `/.well-known/agent.json`, falling back to `/.well-known/agent-card.json`. The `serve` web UI has a **Discover** page to inspect any agent's card (capabilities, skills, security, raw JSON).
 - **Multi-turn:** supported implicitly via the server's task/context continuation; no dedicated CLI affordance yet.
-- **Security schemes:** the agent card's `securitySchemes` are read and displayed (Discover page), but **not exercised** — requests are sent unauthenticated.
+- **Auth:** pass credentials with `--bearer`, `--api-key`, or `-H 'Key: Value'` (the web UI has an **Auth** section). These are sent on every request. The agent card's `securitySchemes` are displayed but not auto-negotiated (no OAuth2 authorization-code flow).
 
 ### Debugging
 
@@ -264,7 +282,8 @@ marked ✅ above). Relative to the
 - ❌ **Authenticated extended agent card** — `agent/getAuthenticatedExtendedCard`.
 
 **Security**
-- ❌ **Auth flows** — the agent card's `securitySchemes` (OAuth2 / API key / bearer) are displayed but not exercised; requests go out unauthenticated.
+- ✅ **Static credentials** — bearer token, API key, and arbitrary headers (`--bearer` / `--api-key` / `-H`, or the web UI Auth section).
+- ❌ **Negotiated auth flows** — no OAuth2 authorization-code / client-credentials flow driven from the card's `securitySchemes`; you supply the token yourself.
 
 **Interaction**
 - ❌ **Multi-turn `input-required`** — works implicitly via context continuation, but there's no dedicated CLI affordance for the `input-required` state.

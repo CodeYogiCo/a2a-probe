@@ -18,6 +18,7 @@ import (
 type SSETransport struct {
 	rpcEndpoint string
 	sseEndpoint string
+	headers     map[string]string
 	client      *http.Client
 	// Set by a streaming Call; consumed incrementally by Stream.
 	streamBody    io.ReadCloser
@@ -25,13 +26,14 @@ type SSETransport struct {
 }
 
 // NewSSE creates an SSETransport. If sseEndpoint is empty it is derived from rpcEndpoint.
-func NewSSE(rpcEndpoint, sseEndpoint string) *SSETransport {
+func NewSSE(rpcEndpoint, sseEndpoint string, headers map[string]string) *SSETransport {
 	if sseEndpoint == "" {
 		sseEndpoint = strings.TrimRight(strings.TrimSuffix(strings.TrimRight(rpcEndpoint, "/"), "/rpc"), "/")
 	}
 	return &SSETransport{
 		rpcEndpoint: strings.TrimRight(rpcEndpoint, "/"),
 		sseEndpoint: sseEndpoint,
+		headers:     headers,
 		client: &http.Client{
 			Timeout: 90 * time.Second,
 		},
@@ -63,6 +65,9 @@ func (t *SSETransport) Call(method string, params json.RawMessage) (json.RawMess
 	req.Header.Set("Content-Type", "application/json")
 	if isStreaming {
 		req.Header.Set("Accept", "text/event-stream")
+	}
+	for k, v := range t.headers {
+		req.Header.Set(k, v)
 	}
 
 	debug.Logf("→ SSE POST %s  method=%s", targetURL, method)

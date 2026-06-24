@@ -17,7 +17,7 @@ func TestHTTPTransportCall_JSONResponse(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	tr := NewHTTP(srv.URL)
+	tr := NewHTTP(srv.URL, nil)
 	result, err := tr.Call("tasks/get", json.RawMessage(`{"id":"task-1"}`))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -40,7 +40,7 @@ func TestHTTPTransportCall_RPCError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	tr := NewHTTP(srv.URL)
+	tr := NewHTTP(srv.URL, nil)
 	_, err := tr.Call("tasks/unknown", json.RawMessage(`{}`))
 	if err == nil {
 		t.Fatal("expected error")
@@ -62,7 +62,7 @@ func TestHTTPTransportCall_SSEResponse(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	tr := NewHTTP(srv.URL)
+	tr := NewHTTP(srv.URL, nil)
 	_, err := tr.Call("tasks/sendSubscribe", json.RawMessage(`{}`))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -86,7 +86,7 @@ func TestHTTPTransportCall_UnsupportedContentType(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	tr := NewHTTP(srv.URL)
+	tr := NewHTTP(srv.URL, nil)
 	_, err := tr.Call("tasks/get", json.RawMessage(`{}`))
 	if err == nil {
 		t.Fatal("expected error for unsupported content type")
@@ -94,7 +94,7 @@ func TestHTTPTransportCall_UnsupportedContentType(t *testing.T) {
 }
 
 func TestHTTPTransportClose(t *testing.T) {
-	tr := NewHTTP("http://localhost:9999")
+	tr := NewHTTP("http://localhost:9999", nil)
 	if err := tr.Close(); err != nil {
 		t.Errorf("Close() should not error: %v", err)
 	}
@@ -124,7 +124,7 @@ func TestHTTPTransportStreamIncremental(t *testing.T) {
 	defer srv.Close()
 	defer close(release)
 
-	tr := NewHTTP(srv.URL)
+	tr := NewHTTP(srv.URL, nil)
 	if _, err := tr.Call("message/stream", json.RawMessage(`{}`)); err != nil {
 		t.Fatalf("Call failed: %v", err)
 	}

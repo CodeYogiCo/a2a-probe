@@ -51,21 +51,66 @@ func debugLog(next http.Handler) http.Handler {
 
 // apiReq is the common JSON body for API requests.
 type apiReq struct {
-	Server    string `json:"server"`
-	Transport string `json:"transport"`
-	Message   string `json:"message"`
-	SessionID string `json:"session_id"`
-	Legacy    bool   `json:"legacy"`
-	ID        string `json:"id"`
+	Server    string          `json:"server"`
+	Transport string          `json:"transport"`
+	Message   string          `json:"message"`
+	Data      json.RawMessage `json:"data"`
+	Metadata  json.RawMessage `json:"metadata"`
+	SessionID string          `json:"session_id"`
+	Legacy    bool            `json:"legacy"`
+	ID        string          `json:"id"`
 }
 
-func (s *Server) buildClient(server, transport string) (*client.A2AClient, string, error) {
+func (s *Server) buildClient(server, transport string, headers map[string]string) (*client.A2AClient, string, error) {
 	url, err := config.ResolveServerURL(server)
 	if err != nil {
 		return nil, "", err
 	}
-	c, err := client.BuildClient(url, transport)
+	c, err := client.BuildClientWithHeaders(url, transport, headers)
 	return c, url, err
+}
+
+// reqHeaders extracts agent auth headers the web UI passes to us (so tokens
+// travel in request headers, not query strings).
+func reqHeaders(r *http.Request) map[string]string {
+	h := map[string]string{}
+	if b := r.Header.Get("X-A2A-Bearer"); b != "" {
+		h["Authorization"] = "Bearer " + b
+	}
+	if k := r.Header.Get("X-A2A-Api-Key"); k != "" {
+		h["X-API-Key"] = k
+	}
+	if raw := r.Header.Get("X-A2A-Headers"); raw != "" {
+		var extra map[string]string
+		if json.Unmarshal([]byte(raw), &extra) == nil {
+			for k, v := range extra {
+				h[k] = v
+			}
+		}
+	}
+	if len(h) == 0 {
+		return nil
+	}
+	return h
+}
+
+// apiMessage builds the outgoing message from the request's text/data/metadata.
+func apiMessage(req apiReq) (model.Message, error) {
+	var parts []json.RawMessage
+	if req.Message != "" {
+		parts = append(parts, client.TextPart(req.Message))
+	}
+	if len(req.Data) > 0 && json.Valid(req.Data) {
+		parts = append(parts, client.DataPart(req.Data))
+	}
+	if len(parts) == 0 {
+		return model.Message{}, fmt.Errorf("empty message")
+	}
+	var meta json.RawMessage
+	if len(req.Metadata) > 0 && json.Valid(req.Metadata) {
+		meta = req.Metadata
+	}
+	return client.MakeMessage(uuid.New().String(), parts, meta), nil
 }
 
 func writeJSON(w http.ResponseWriter, v interface{}) {
@@ -89,7 +134,7 @@ func (s *Server) agentCard(w http.ResponseWriter, r *http.Request) {
 	if transport == "" {
 		transport = "http"
 	}
-	c, url, err := s.buildClient(server, transport)
+	c, url, err := s.buildClient(server, transport, reqHeaders(r))
 	if err != nil {
 		writeErr(w, err.Error(), http.StatusBadRequest)
 		return
@@ -105,7 +150,7 @@ func (s *Server) discover(w http.ResponseWriter, r *http.Request) {
 	if server == "" {
 		server = "http://localhost:8000"
 	}
-	c, url, err := s.buildClient(server, "http")
+	c, url, err := s.buildClient(server, "http", reqHeaders(r))
 	if err != nil {
 		writeErr(w, err.Error(), http.StatusBadRequest)
 		return
@@ -130,14 +175,18 @@ func (s *Server) send(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	c, _, err := s.buildClient(req.Server, req.Transport)
+	c, _, err := s.buildClient(req.Server, req.Transport, reqHeaders(r))
 	if err != nil {
 		writeErr(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	defer c.Close()
 
-	msg := client.MakeTextMessage(req.Message, uuid.New().String())
+	msg, err := apiMessage(req)
+	if err != nil {
+		writeErr(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	if !req.Legacy {
 		if resp, err := c.SendMessage(msg); err == nil {
@@ -174,7 +223,7 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	c, _, err := s.buildClient(req.Server, req.Transport)
+	c, _, err := s.buildClient(req.Server, req.Transport, reqHeaders(r))
 	if err != nil {
 		writeErr(w, err.Error(), http.StatusBadRequest)
 		return
@@ -187,7 +236,11 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	msg := client.MakeTextMessage(req.Message, uuid.New().String())
+	msg, err := apiMessage(req)
+	if err != nil {
+		writeErr(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	sid := req.SessionID
 	params := model.TaskSendParams{
 		ID:        uuid.New().String(),
@@ -272,7 +325,7 @@ func (s *Server) debugStream(w http.ResponseWriter, r *http.Request) {
 // GET /api/task?server=...&transport=...&id=...
 func (s *Server) getTask(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	c, _, err := s.buildClient(q.Get("server"), q.Get("transport"))
+	c, _, err := s.buildClient(q.Get("server"), q.Get("transport"), reqHeaders(r))
 	if err != nil {
 		writeErr(w, err.Error(), http.StatusBadRequest)
 		return
@@ -298,7 +351,7 @@ func (s *Server) cancel(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	c, _, err := s.buildClient(req.Server, req.Transport)
+	c, _, err := s.buildClient(req.Server, req.Transport, reqHeaders(r))
 	if err != nil {
 		writeErr(w, err.Error(), http.StatusBadRequest)
 		return

@@ -267,3 +267,37 @@ func TestCardBasesOriginFirst(t *testing.T) {
 		t.Errorf("want [origin], got %v", got)
 	}
 }
+
+func TestPartBuilders(t *testing.T) {
+	var p map[string]any
+
+	json.Unmarshal(DataPart(json.RawMessage(`{"q":1}`)), &p)
+	if p["kind"] != "data" {
+		t.Errorf("data part kind: got %v", p["kind"])
+	}
+
+	json.Unmarshal(FilePartURI("https://x/y.pdf", "y.pdf", "application/pdf"), &p)
+	if p["kind"] != "file" {
+		t.Errorf("file part kind: got %v", p["kind"])
+	}
+	f := p["file"].(map[string]any)
+	if f["uri"] != "https://x/y.pdf" || f["name"] != "y.pdf" {
+		t.Errorf("file uri part wrong: %v", f)
+	}
+
+	json.Unmarshal(FilePartBytes([]byte("hi"), "a.txt", "text/plain"), &p)
+	f = p["file"].(map[string]any)
+	if f["bytes"] != "aGk=" { // base64("hi")
+		t.Errorf("file bytes wrong: %v", f["bytes"])
+	}
+}
+
+func TestMakeMessageMultiPart(t *testing.T) {
+	m := MakeMessage("m1", []json.RawMessage{TextPart("hi"), DataPart(json.RawMessage(`{"a":1}`))}, json.RawMessage(`{"x":true}`))
+	if len(m.Parts) != 2 {
+		t.Fatalf("parts: want 2, got %d", len(m.Parts))
+	}
+	if string(m.Metadata) != `{"x":true}` {
+		t.Errorf("metadata: got %s", m.Metadata)
+	}
+}

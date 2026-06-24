@@ -64,6 +64,12 @@ hr.div{border:none;border-top:1px solid var(--border);margin:2px 0}
 .tag{display:inline-block;background:var(--bg2);border:1px solid var(--border);
   border-radius:3px;padding:1px 5px;font-size:10px;margin-top:3px;margin-right:3px}
 .session-val{font-size:10px;color:var(--dim);word-break:break-all;line-height:1.6;cursor:default;font-family:var(--mono)}
+.auth summary{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);cursor:pointer;padding:2px 0;user-select:none}
+.auth>div{margin-top:7px}
+.sidebar textarea{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:6px;font:inherit;font-size:11px;outline:none;resize:vertical;font-family:var(--mono)}
+.sidebar textarea:focus{border-color:var(--accent)}
+.data-input{background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:var(--radius);font-family:var(--mono);font-size:12px;outline:none;resize:vertical}
+.data-input:focus{border-color:var(--accent)}
 /* chat */
 .chat{flex:1;display:flex;flex-direction:column;overflow:hidden}
 .msgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px}
@@ -214,6 +220,12 @@ details>summary{cursor:pointer;color:var(--dim);font-size:11px;user-select:none;
         <option value="ws">ws</option>
       </select>
     </div>
+    <details class="auth">
+      <summary>Auth (optional)</summary>
+      <div><label>Bearer token</label><input id="auth-bearer" type="password" placeholder="token" autocomplete="off"></div>
+      <div><label>API key</label><input id="auth-apikey" type="password" placeholder="X-API-Key value" autocomplete="off"></div>
+      <div><label>Extra headers</label><textarea id="auth-headers" rows="2" placeholder="Header: value (one per line)"></textarea></div>
+    </details>
     <button class="btn primary" id="conn-btn">Connect</button>
 
     <div id="card-area" style="display:none">
@@ -250,7 +262,9 @@ details>summary{cursor:pointer;color:var(--dim);font-size:11px;user-select:none;
       <div class="opts">
         <label class="toggle"><input type="checkbox" id="stream-chk" checked> stream</label>
         <label class="toggle"><input type="checkbox" id="legacy-chk"> legacy task API</label>
+        <label class="toggle"><input type="checkbox" id="data-chk"> + data</label>
       </div>
+      <textarea id="data-input" class="data-input" rows="3" placeholder='Structured JSON data part, e.g. {"query":"red dress","filters":{"size":"M"}}' style="display:none"></textarea>
       <div class="input-row">
         <textarea id="ti" placeholder="Type a message… (Enter to send, Shift+Enter for newline)" rows="1"></textarea>
         <button class="send-btn" id="send-btn" disabled>Send</button>
@@ -280,6 +294,27 @@ let streaming = null   // current streaming .msg element
 const $ = id => document.getElementById(id)
 const srv = () => $('srv').value.trim() || 'http://localhost:8000'
 const tsp = () => $('tsp').value
+
+// Auth headers passed to our server, which forwards them to the agent.
+function authHeaders() {
+  const h = {}
+  const b = $('auth-bearer').value.trim(); if (b) h['X-A2A-Bearer'] = b
+  const k = $('auth-apikey').value.trim(); if (k) h['X-A2A-Api-Key'] = k
+  const raw = $('auth-headers').value.trim()
+  if (raw) {
+    const extra = {}
+    raw.split('\n').forEach(l => { const i = l.indexOf(':'); if (i > 0) extra[l.slice(0, i).trim()] = l.slice(i + 1).trim() })
+    if (Object.keys(extra).length) h['X-A2A-Headers'] = JSON.stringify(extra)
+  }
+  return h
+}
+// Parsed JSON from the data box (or undefined). Throws on invalid JSON.
+function dataPayload() {
+  if (!$('data-chk').checked) return undefined
+  const v = $('data-input').value.trim(); if (!v) return undefined
+  try { return JSON.parse(v) } catch { throw new Error('Invalid JSON in the data box') }
+}
+$('data-chk').addEventListener('change', e => { $('data-input').style.display = e.target.checked ? 'block' : 'none' })
 
 // ── theme ─────────────────────────────────────────────────────────────────────
 let theme = localStorage.getItem('a2a.theme') || 'light'
@@ -311,7 +346,7 @@ async function connect() {
   const btn = $('conn-btn')
   btn.disabled = true; btn.textContent = 'Connecting…'
   try {
-    const r = await fetch('/api/agent-card?' + new URLSearchParams({server: srv(), transport: tsp()}))
+    const r = await fetch('/api/agent-card?' + new URLSearchParams({server: srv(), transport: tsp()}), {headers: authHeaders()})
     const d = await r.json()
     if (d.error) throw new Error(d.error)
     setConn(true)
@@ -367,7 +402,7 @@ async function doDiscover() {
   const url = $('disc-url').value.trim(); if (!url) return
   const res = $('disc-result'); res.innerHTML = '<p class="muted">Discovering…</p>'
   try {
-    const r = await fetch('/api/discover?' + new URLSearchParams({server: url}))
+    const r = await fetch('/api/discover?' + new URLSearchParams({server: url}), {headers: authHeaders()})
     const d = await r.json()
     if (d.error) throw new Error(d.error)
     renderDiscovery(d.raw, d.url, url)
@@ -483,21 +518,28 @@ $('ti').addEventListener('keydown', e => {
 })
 
 async function doSend() {
-  const text = $('ti').value.trim(); if (!text) return
+  const text = $('ti').value.trim()
+  let data
+  try { data = dataPayload() } catch(e) { return errMsg(e.message) }
+  if (!text && data === undefined) return
   $('ti').value = ''; $('ti').style.height = 'auto'
   $('send-btn').disabled = true
-  addMsg('user', text)
+  addMsg('user', text || JSON.stringify(data, null, 2))
   try {
-    if ($('stream-chk').checked) await streamSend(text)
-    else await plainSend(text)
+    if ($('stream-chk').checked) await streamSend(text, data)
+    else await plainSend(text, data)
   } catch(e) { errMsg(e.message) }
   finally { stopThinking(); $('send-btn').disabled = false; $('ti').focus() }
 }
 
-async function plainSend(text) {
+function sendBody(text, data) {
+  return JSON.stringify({server:srv(), transport:tsp(), message:text, data, session_id:sessionId, legacy:$('legacy-chk').checked})
+}
+
+async function plainSend(text, data) {
   const r = await fetch('/api/send', {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({server:srv(), transport:tsp(), message:text, session_id:sessionId, legacy:$('legacy-chk').checked})
+    method:'POST', headers:{'Content-Type':'application/json', ...authHeaders()},
+    body: sendBody(text, data)
   })
   const d = await r.json()
   if (d.error) throw new Error(d.error)
@@ -505,10 +547,10 @@ async function plainSend(text) {
   else if (d.task) renderTask(d.task)
 }
 
-async function streamSend(text) {
+async function streamSend(text, data) {
   const r = await fetch('/api/stream', {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({server:srv(), transport:tsp(), message:text, session_id:sessionId, legacy:$('legacy-chk').checked})
+    method:'POST', headers:{'Content-Type':'application/json', ...authHeaders()},
+    body: sendBody(text, data)
   })
   if (!r.ok) throw new Error('Stream failed: HTTP ' + r.status)
   const reader = r.body.getReader()
@@ -587,7 +629,7 @@ function mkStreamMsg() {
 $('get-btn').addEventListener('click', async () => {
   const id = $('task-id').value.trim(); if (!id) return errMsg('Enter a task ID')
   try {
-    const r = await fetch('/api/task?' + new URLSearchParams({server:srv(), transport:tsp(), id}))
+    const r = await fetch('/api/task?' + new URLSearchParams({server:srv(), transport:tsp(), id}), {headers: authHeaders()})
     const d = await r.json()
     if (d.error) throw new Error(d.error)
     renderTask(d.task)
@@ -598,7 +640,7 @@ $('cancel-btn').addEventListener('click', async () => {
   const id = $('task-id').value.trim(); if (!id) return errMsg('Enter a task ID')
   try {
     const r = await fetch('/api/cancel', {
-      method:'POST', headers:{'Content-Type':'application/json'},
+      method:'POST', headers:{'Content-Type':'application/json', ...authHeaders()},
       body: JSON.stringify({server:srv(), transport:tsp(), id})
     })
     const d = await r.json()
@@ -689,6 +731,11 @@ function uuid() {
 // ── restore ───────────────────────────────────────────────────────────────────
 const ss = localStorage.getItem('a2a.server'); if(ss) { $('srv').value = ss; $('disc-url').value = ss }
 const st = localStorage.getItem('a2a.transport'); if(st) $('tsp').value = st
+// restore + persist auth fields
+for (const [id, key] of [['auth-bearer','a2a.bearer'],['auth-apikey','a2a.apikey'],['auth-headers','a2a.headers']]) {
+  const v = localStorage.getItem(key); if (v) $(id).value = v
+  $(id).addEventListener('change', () => localStorage.setItem(key, $(id).value))
+}
 showView('discover') // discovery is the home page
 </script>
 </body>

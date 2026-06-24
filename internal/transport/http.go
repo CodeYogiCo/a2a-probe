@@ -17,6 +17,7 @@ import (
 // HTTPTransport sends JSON-RPC over HTTP (and handles SSE responses).
 type HTTPTransport struct {
 	endpoint string
+	headers  map[string]string
 	client   *http.Client
 	// Set by a streaming Call; consumed incrementally by Stream.
 	streamBody    io.ReadCloser
@@ -24,9 +25,10 @@ type HTTPTransport struct {
 }
 
 // NewHTTP creates an HTTPTransport targeting the given endpoint URL.
-func NewHTTP(endpoint string) *HTTPTransport {
+func NewHTTP(endpoint string, headers map[string]string) *HTTPTransport {
 	return &HTTPTransport{
 		endpoint: strings.TrimRight(endpoint, "/"),
+		headers:  headers,
 		client: &http.Client{
 			Timeout: 90 * time.Second,
 			Transport: &http.Transport{
@@ -56,6 +58,9 @@ func (t *HTTPTransport) Call(method string, params json.RawMessage) (json.RawMes
 	req.Header.Set("Content-Type", "application/json")
 	if isStreaming {
 		req.Header.Set("Accept", "text/event-stream")
+	}
+	for k, v := range t.headers {
+		req.Header.Set(k, v)
 	}
 
 	debug.Logf("→ HTTP POST %s  method=%s", t.endpoint, method)
