@@ -13,6 +13,8 @@ brew tap CodeYogiCo/tap
 brew install a2a-probe
 ```
 
+This also installs a short **`a2a`** alias, so you can type `a2a send "Hello"` instead of the full `a2a-probe`.
+
 ### Docker
 
 ```bash
