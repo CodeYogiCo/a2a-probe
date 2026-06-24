@@ -254,3 +254,16 @@ func TestCoerceStreamEventTaskInResultEnvelope(t *testing.T) {
 		t.Fatalf("expected Task after unwrapping result envelope, got %+v", ev)
 	}
 }
+
+func TestCardBasesOriginFirst(t *testing.T) {
+	// A service endpoint with a path must still resolve the card at the origin.
+	got := cardBases("https://host.example.com/a2a")
+	if len(got) != 2 || got[0] != "https://host.example.com" || got[1] != "https://host.example.com/a2a" {
+		t.Errorf("want [origin, full], got %v", got)
+	}
+	// A bare origin yields just the origin.
+	got = cardBases("https://host.example.com/")
+	if len(got) != 1 || got[0] != "https://host.example.com" {
+		t.Errorf("want [origin], got %v", got)
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -146,44 +147,60 @@ func (c *A2AClient) Resubscribe(params model.TaskQueryParams) (<-chan StreamEven
 	return c.drainStream(), nil
 }
 
-// FetchAgentCard retrieves /.well-known/agent.json from the base URL.
 // agentCardPaths are the well-known locations to probe, in order. The original
 // path and the newer spec name are both tried for compatibility.
 var agentCardPaths = []string{"/.well-known/agent.json", "/.well-known/agent-card.json"}
 
-// FetchAgentCardRaw fetches the raw agent card JSON, trying each well-known
-// path. It returns the bytes and the URL it was found at.
+// cardBases returns the base URLs to probe for an agent card. Well-known URIs
+// are rooted at the origin (RFC 8615), so the origin is tried first; the full
+// path is kept as a fallback for agents that (non-compliantly) serve the card
+// under their service path.
+func cardBases(raw string) []string {
+	full := strings.TrimRight(raw, "/")
+	if u, err := url.Parse(raw); err == nil && u.Scheme != "" && u.Host != "" {
+		origin := u.Scheme + "://" + u.Host
+		if full != origin {
+			return []string{origin, full}
+		}
+		return []string{origin}
+	}
+	return []string{full}
+}
+
+// FetchAgentCardRaw fetches the raw agent card JSON, trying each base/well-known
+// combination. It returns the bytes and the URL it was found at.
 func (c *A2AClient) FetchAgentCardRaw(baseURL string) (json.RawMessage, string, error) {
-	base := strings.TrimRight(baseURL, "/")
 	httpClient := &http.Client{Timeout: 10 * time.Second}
 	var lastErr error
-	for _, p := range agentCardPaths {
-		url := base + p
-		debug.Logf("→ GET agent card %s", url)
-		resp, err := httpClient.Get(url)
-		if err != nil {
-			lastErr = err
-			continue
+	for _, base := range cardBases(baseURL) {
+		for _, p := range agentCardPaths {
+			cardURL := base + p
+			debug.Logf("→ GET agent card %s", cardURL)
+			resp, err := httpClient.Get(cardURL)
+			if err != nil {
+				lastErr = err
+				continue
+			}
+			body, err := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			debug.Logf("← agent card %s: HTTP %d (%d bytes)", cardURL, resp.StatusCode, len(body))
+			if err != nil {
+				lastErr = err
+				continue
+			}
+			if resp.StatusCode != http.StatusOK {
+				lastErr = fmt.Errorf("HTTP %d from %s", resp.StatusCode, cardURL)
+				continue
+			}
+			if !json.Valid(body) {
+				lastErr = fmt.Errorf("invalid JSON from %s", cardURL)
+				continue
+			}
+			return json.RawMessage(body), cardURL, nil
 		}
-		body, err := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		debug.Logf("← agent card %s: HTTP %d (%d bytes)", url, resp.StatusCode, len(body))
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		if resp.StatusCode != http.StatusOK {
-			lastErr = fmt.Errorf("HTTP %d from %s", resp.StatusCode, url)
-			continue
-		}
-		if !json.Valid(body) {
-			lastErr = fmt.Errorf("invalid JSON from %s", url)
-			continue
-		}
-		return json.RawMessage(body), url, nil
 	}
 	if lastErr == nil {
-		lastErr = fmt.Errorf("no agent card found at %s", base)
+		lastErr = fmt.Errorf("no agent card found at %s", baseURL)
 	}
 	return nil, "", lastErr
 }
