@@ -217,10 +217,13 @@ jobs:
               on_linux do
                 bin.install "a2a-probe-linux-amd64" => "a2a-probe"
               end
+              # short alias so "a2a" works too
+              bin.install_symlink bin/"a2a-probe" => "a2a"
             end
 
             test do
               assert_match "a2a-probe", shell_output("#{bin}/a2a-probe --help 2>&1")
+              assert_match "a2a-probe", shell_output("#{bin}/a2a --help 2>&1")
             end
           end
           FORMULA

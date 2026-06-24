@@ -1,4 +1,4 @@
-# a2a-probe
+<img src="web/logo.svg" alt="a2a-probe" height="44">
 
 A command-line client for the [A2A (Agent-to-Agent) Protocol](https://google.github.io/A2A/) v0.3.0, written in Go.
 
@@ -12,6 +12,8 @@ A command-line client for the [A2A (Agent-to-Agent) Protocol](https://google.git
 brew tap CodeYogiCo/tap
 brew install a2a-probe
 ```
+
+This also installs a short **`a2a`** alias, so you can type `a2a send "Hello"` instead of the full `a2a-probe`.
 
 ### Docker
 
