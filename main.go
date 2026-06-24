@@ -23,7 +23,7 @@ import (
 //go:embed web
 var webFS embed.FS
 
-const version = "0.2.10"
+const version = "0.2.11"
 
 var (
 	flagServer    string
