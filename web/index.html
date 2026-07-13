@@ -379,6 +379,17 @@ function renderCard(card) {
   if (caps.streaming) h += '<span class="tag" style="color:var(--cyan)">streaming</span>'
   if (caps.pushNotifications) h += '<span class="tag">push</span>'
   if (caps.stateTransitionHistory) h += '<span class="tag">history</span>'
+  const skills = card.skills || []
+  if (skills.length) {
+    h += '<div class="disc-sec">skills (' + skills.length + ')</div>'
+    for (const s of skills) {
+      h += '<div class="skill"><div class="sname">' + esc(s.name || s.id || '') + ' <span class="sid">' + esc(s.id || '') + '</span></div>'
+      if (s.description) h += '<div class="muted" style="margin-top:4px">' + esc(s.description) + '</div>'
+      if (s.tags?.length) h += '<div style="margin-top:4px">' + s.tags.map(t => '<span class="tag">' + esc(t) + '</span>').join('') + '</div>'
+      if (s.examples?.length) h += '<div class="muted" style="margin-top:4px">e.g. ' + esc(s.examples.join(' · ')) + '</div>'
+      h += '</div>'
+    }
+  }
   $('card-box').innerHTML = h
   $('card-area').style.display = 'block'
   sysMsg('Agent: ' + (card.name || '(unnamed)') + (card.version ? ' v' + card.version : ''))
