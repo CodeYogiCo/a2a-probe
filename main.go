@@ -42,7 +42,7 @@ var (
 func main() {
 	root := &cobra.Command{
 		Use:     "a2a-probe",
-		Short:   "Command-line client for the A2A (Agent-to-Agent) Protocol v0.3.0",
+		Short:   "Command-line client for the A2A (Agent-to-Agent) Protocol v" + version,
 		Version: version,
 	}
 	root.PersistentFlags().StringVarP(&flagServer, "server", "s", "http://localhost:8000",
